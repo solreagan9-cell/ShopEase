@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Release medicine · MediCore Pharmacy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/extra.css">
+</head>
+<body data-page="release" data-nav="release" data-title="Release medicine"
+      data-parent-label="Medicine inventory" data-parent-href="medicines.html">
+
+<div id="page-source" hidden>
+
+  <section class="welcome-row">
+    <div>
+      <div class="eyebrow"><span class="eyebrow-line"></span> INVENTORY MANAGEMENT</div>
+      <h1>Release medicine</h1>
+      <p class="subtitle">Take stock out of inventory. Every release is logged.</p>
+    </div>
+    <a class="button button-light" href="medicines.html">← Back to inventory</a>
+  </section>
+
+  <form class="form-layout" id="releaseForm" novalidate>
+    <section class="panel form-panel">
+      <div class="form-section-heading">
+        <span class="form-section-icon">↗</span>
+        <div>
+          <h2>Release details</h2>
+          <p>Choose the medicine and how many to release. Expired or out-of-stock items are not listed.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <label class="field field-wide"><span>Medicine <b>*</b></span>
+          <select name="medicine" id="medicineSelect" required>
+            <option value="" disabled selected>Select a medicine</option>
+          </select>
+        </label>
+
+        <label class="field"><span>Quantity to release <b>*</b></span>
+          <input type="number" name="quantity" id="quantityInput" required min="1" step="1" placeholder="e.g. 10">
+        </label>
+
+        <label class="field"><span>Released to</span>
+          <input name="released_to" maxlength="120" placeholder="Patient or customer (optional)">
+        </label>
+
+        <label class="field field-wide"><span>Note</span>
+          <input name="note" maxlength="255" placeholder="Optional note, e.g. prescription no.">
+        </label>
+      </div>
+
+      <div class="release-info" id="releaseInfo" hidden></div>
+      <small class="release-empty" id="noStock" hidden style="display:block;padding:12px 0 0;color:#b45309;text-align:left;">
+        No medicines available to release. Add stock or check expiry dates first.
+      </small>
+
+      <div class="form-note"><span>ⓘ</span> Released quantity is deducted from stock right away and cannot be undone from this page.</div>
+    </section>
+
+    <div class="form-actions">
+      <span class="form-hint" id="formHint">Select a medicine and enter a quantity to enable releasing.</span>
+      <a class="button button-light" href="medicines.html">Cancel</a>
+      <button class="button button-primary" type="submit" id="releaseBtn" disabled>Release medicine <span>→</span></button>
+    </div>
+  </form>
+
+  <section class="panel form-panel" style="margin-top: 24px;">
+    <div class="form-section-heading">
+      <span class="form-section-icon teal-icon">▤</span>
+      <div>
+        <h2>Recent releases</h2>
+        <p>The last 10 releases.</p>
+      </div>
+    </div>
+    <div id="recentBox"><p class="release-empty">Loading…</p></div>
+  </section>
+
+</div>
+
+<script src="js/logo-data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/layout.js"></script>
+<script>
+  (function () {
+    var form = document.getElementById("releaseForm");
+    var btn = document.getElementById("releaseBtn");
+    var hint = document.getElementById("formHint");
+    var select = document.getElementById("medicineSelect");
+    var qty = document.getElementById("quantityInput");
+    var info = document.getElementById("releaseInfo");
+
+    function selectedOption() {
+      return select.selectedIndex > 0 ? select.options[select.selectedIndex] : null;
+    }
+
+    function update() {
+      var opt = selectedOption();
+      var stock = opt ? parseInt(opt.dataset.stock, 10) : 0;
+      var amount = parseInt(qty.value, 10);
+      var ok = false;
+      var message = "Select a medicine and enter a quantity to enable releasing.";
+
+      if (opt) {
+        qty.max = stock;
+        var price = parseFloat(opt.dataset.price) || 0;
+        var total = (!isNaN(amount) && amount > 0) ? amount * price : 0;
+        info.hidden = false;
+        info.textContent = stock + " " + opt.dataset.unit + "(s) in stock · ₱" +
+          price.toFixed(2) + " each · expires " + opt.dataset.expiry +
+          (total ? " · This release: ₱" + total.toFixed(2) : "");
+
+        if (isNaN(amount) || amount < 1) {
+          message = "Enter a quantity of at least 1.";
+        } else if (amount > stock) {
+          message = "Only " + stock + " in stock. Lower the quantity.";
+        } else {
+          ok = true;
+          message = "Ready to release.";
+        }
+      } else {
+        qty.removeAttribute("max");
+        info.hidden = true;
+      }
+
+      btn.disabled = !ok;
+      hint.textContent = message;
+      hint.classList.toggle("is-ready", ok);
+    }
+
+    function renderMedicines(list) {
+      list.forEach(function (m) {
+        var o = document.createElement("option");
+        o.value = m.id;
+        o.dataset.stock = m.quantity;
+        o.dataset.unit = (m.unit_label || "").toLowerCase();
+        o.dataset.price = m.unit_price;
+        o.dataset.expiry = fmtDate(m.expiry_date);
+        o.textContent = m.name + " · " + m.batch_number + " · " + m.quantity + " in stock";
+        select.appendChild(o);
+      });
+      document.getElementById("noStock").hidden = list.length > 0;
+    }
+
+    function renderRecent(list) {
+      var box = document.getElementById("recentBox");
+      if (!list.length) {
+        box.innerHTML = '<p class="release-empty">No releases yet.</p>';
+        return;
+      }
+      var rows = list.map(function (r) {
+        return "<tr><td>" + esc(fmtDateTime(r.released_at)) + "</td>" +
+          "<td>" + esc(r.medicine) + "</td>" +
+          '<td class="num">' + esc(r.quantity) + "</td>" +
+          '<td class="num">' + peso(r.total) + "</td>" +
+          "<td>" + esc(r.released_to || "—") + "</td>" +
+          "<td>" + esc(r.released_by || "—") + "</td></tr>";
+      }).join("");
+      box.innerHTML = '<div class="release-table-wrap"><table class="release-table"><thead><tr>' +
+        '<th>Date</th><th>Medicine</th><th class="num">Qty</th><th class="num">Value</th>' +
+        "<th>Released to</th><th>By</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+    }
+
+    select.addEventListener("change", update);
+    form.addEventListener("input", update);
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      update();
+      if (btn.disabled) return;
+
+      Layout.clearNotices();
+      var original = btn.innerHTML;
+      btn.disabled = true;
+      btn.textContent = "Releasing…";
+
+      try {
+        var res = await Api.release({
+          medicine: select.value,
+          quantity: parseInt(qty.value, 10),
+          released_to: form.elements.released_to.value,
+          note: form.elements.note.value
+        });
+        Layout.flash("success", res.message);
+        location.reload();
+      } catch (err) {
+        var list = err.errors && err.errors.length ? err.errors : [err.message];
+        list.forEach(function (m) { Layout.notify("error", m); });
+        btn.innerHTML = original;
+        update();
+      }
+    });
+
+    Layout.ready.then(async function (ok) {
+      if (!ok) return;
+      try {
+        var data = await Api.releaseOptions();
+        renderMedicines(data.medicines);
+        renderRecent(data.recent);
+      } catch (err) {
+        Layout.notify("error", err.message);
+        document.getElementById("recentBox").innerHTML = "";
+      }
+      update();
+    });
+  })();
+</script>
+</body>
+</html>

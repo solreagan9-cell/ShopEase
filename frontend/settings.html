@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings · MediCore Pharmacy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/extra.css">
+  <style>
+    .field.field-invalid input {
+      border-color: #dc2626 !important;
+      background-color: #fef2f2 !important;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+    }
+    .field.field-invalid > span:first-child { color: #b91c1c; }
+    .field-error {
+      display: block;
+      margin-top: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #dc2626;
+    }
+    #usernameInput[readonly] {
+      background-color: #f1f5f9 !important;
+      color: #64748b;
+      cursor: not-allowed;
+    }
+    .settings-gap { margin-top: 28px; }
+    #profileBtn:disabled, #passwordBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+  </style>
+</head>
+<body data-page="settings" data-nav="settings" data-title="Settings"
+      data-parent-label="Overview" data-parent-href="dashboard.html">
+
+<div id="page-source" hidden>
+
+  <section class="welcome-row">
+    <div>
+      <div class="eyebrow"><span class="eyebrow-line"></span> ACCOUNT</div>
+      <h1>Settings</h1>
+      <p class="subtitle">Update your name and change your password.</p>
+    </div>
+    <a class="button button-light" href="dashboard.html">← Back to overview</a>
+  </section>
+
+  <!-- Profile -->
+  <form class="form-layout" id="profileForm" novalidate>
+    <section class="panel form-panel">
+      <div class="form-section-heading">
+        <span class="form-section-icon">✚</span>
+        <div>
+          <h2>Profile</h2>
+          <p>Your username is used to sign in and cannot be changed.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <label class="field"><span>Username</span>
+          <input id="usernameInput" name="username" readonly>
+        </label>
+        <div></div>
+
+        <label class="field"><span>First name</span>
+          <input name="first_name" maxlength="150" autocomplete="given-name" placeholder="First name">
+        </label>
+
+        <label class="field"><span>Last name</span>
+          <input name="last_name" maxlength="150" autocomplete="family-name" placeholder="Last name">
+        </label>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <span class="form-hint" id="profileHint">Change your name to enable saving.</span>
+      <button class="button button-primary" type="submit" id="profileBtn" disabled>Save changes</button>
+    </div>
+  </form>
+
+  <!-- Password -->
+  <form class="form-layout settings-gap" id="passwordForm" novalidate>
+    <section class="panel form-panel">
+      <div class="form-section-heading">
+        <span class="form-section-icon">✚</span>
+        <div>
+          <h2>Change password</h2>
+          <p>Enter your current password, then choose a new one.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <label class="field field-wide"><span>Current password <b>*</b></span>
+          <input type="password" name="current_password" autocomplete="current-password">
+        </label>
+
+        <label class="field"><span>New password <b>*</b></span>
+          <input type="password" name="new_password" autocomplete="new-password">
+        </label>
+
+        <label class="field"><span>Confirm new password <b>*</b></span>
+          <input type="password" name="confirm_password" autocomplete="new-password">
+        </label>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <span class="form-hint" id="passwordHint">Fill in all password fields to enable saving.</span>
+      <button class="button button-primary" type="submit" id="passwordBtn" disabled>Change password</button>
+    </div>
+  </form>
+
+</div>
+
+<script src="js/logo-data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/layout.js"></script>
+<script>
+  (function () {
+    var profileForm = document.getElementById("profileForm");
+    var passwordForm = document.getElementById("passwordForm");
+    var profileBtn = document.getElementById("profileBtn");
+    var passwordBtn = document.getElementById("passwordBtn");
+    var profileHint = document.getElementById("profileHint");
+    var passwordHint = document.getElementById("passwordHint");
+
+    var loaded = { first_name: "", last_name: "" };
+    var touched = {};
+    var savingProfile = false;
+    var savingPassword = false;
+
+    function setInvalid(wrap, on, message) {
+      wrap.classList.toggle("field-invalid", on);
+      var err = wrap.querySelector(".field-error");
+      if (on) {
+        if (!err) {
+          err = document.createElement("small");
+          err.className = "field-error";
+          wrap.appendChild(err);
+        }
+        err.textContent = message;
+      } else if (err) {
+        err.remove();
+      }
+    }
+
+    /* ---------- profile ---------- */
+
+    function refreshProfile() {
+      var changed =
+        profileForm.elements.first_name.value.trim() !== loaded.first_name ||
+        profileForm.elements.last_name.value.trim() !== loaded.last_name;
+      profileBtn.disabled = savingProfile || !changed;
+      if (!savingProfile) {
+        profileHint.textContent = changed ? "Your changes are saved right away." : "Change your name to enable saving.";
+      }
+    }
+
+    profileForm.addEventListener("input", refreshProfile);
+
+    profileForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      Layout.clearNotices();
+      savingProfile = true;
+      profileBtn.disabled = true;
+      profileBtn.textContent = "Saving…";
+      try {
+        await Api.updateProfile({
+          first_name: profileForm.elements.first_name.value.trim(),
+          last_name: profileForm.elements.last_name.value.trim()
+        });
+        Layout.flash("success", "Your profile was updated.");
+        location.reload();
+      } catch (err) {
+        var list = err.errors && err.errors.length ? err.errors : [err.message];
+        list.forEach(function (m) { Layout.notify("error", m); });
+        savingProfile = false;
+        profileBtn.textContent = "Save changes";
+        refreshProfile();
+      }
+    });
+
+    /* ---------- password ---------- */
+
+    function refreshPassword() {
+      var current = passwordForm.elements.current_password;
+      var next = passwordForm.elements.new_password;
+      var confirm = passwordForm.elements.confirm_password;
+
+      var currentOk = current.value !== "";
+      var nextOk = next.value !== "";
+      var confirmFilled = confirm.value !== "";
+      var matches = next.value === confirm.value;
+
+      setInvalid(current.closest(".field"), !currentOk && !!touched.current_password, "This field is required.");
+      setInvalid(next.closest(".field"), !nextOk && !!touched.new_password, "This field is required.");
+
+      var confirmMessage = "";
+      if (!confirmFilled) confirmMessage = "This field is required.";
+      else if (!matches) confirmMessage = "The new passwords do not match.";
+      setInvalid(confirm.closest(".field"), !!confirmMessage && !!touched.confirm_password, confirmMessage);
+
+      var allOk = currentOk && nextOk && confirmFilled && matches;
+      passwordBtn.disabled = savingPassword || !allOk;
+      if (!savingPassword) {
+        passwordHint.textContent = allOk ? "Your password changes right away." : "Fill in all password fields to enable saving.";
+      }
+    }
+
+    function markTouched(e) {
+      if (e.target && e.target.name) touched[e.target.name] = true;
+      refreshPassword();
+    }
+
+    passwordForm.addEventListener("input", markTouched);
+    passwordForm.addEventListener("focusout", markTouched);
+
+    passwordForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      Layout.clearNotices();
+      savingPassword = true;
+      passwordBtn.disabled = true;
+      passwordBtn.textContent = "Saving…";
+      try {
+        await Api.changePassword({
+          current_password: passwordForm.elements.current_password.value,
+          new_password: passwordForm.elements.new_password.value,
+          confirm_password: passwordForm.elements.confirm_password.value
+        });
+        passwordForm.reset();
+        touched = {};
+        Layout.notify("success", "Your password was changed.");
+      } catch (err) {
+        var list = err.errors && err.errors.length ? err.errors : [err.message];
+        list.forEach(function (m) { Layout.notify("error", m); });
+      }
+      savingPassword = false;
+      passwordBtn.textContent = "Change password";
+      refreshPassword();
+    });
+
+    refreshProfile();
+    refreshPassword();
+
+    Layout.ready.then(async function (ok) {
+      if (!ok) return;
+      try {
+        var data = await Api.profile();
+        var user = data.user;
+        document.getElementById("usernameInput").value = user.username;
+        profileForm.elements.first_name.value = user.first_name || "";
+        profileForm.elements.last_name.value = user.last_name || "";
+        loaded.first_name = (user.first_name || "").trim();
+        loaded.last_name = (user.last_name || "").trim();
+        refreshProfile();
+      } catch (err) {
+        Layout.notify("error", err.message);
+      }
+    });
+  })();
+</script>
+</body>
+</html>

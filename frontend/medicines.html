@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Medicine inventory · MediCore Pharmacy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/extra.css">
+</head>
+<body data-page="medicines" data-nav="medicines" data-title="Medicine inventory">
+
+<div id="page-source" hidden>
+
+  <section class="welcome-row">
+    <div>
+      <div class="eyebrow"><span class="eyebrow-line"></span> Inventory management</div>
+      <h1>Medicine inventory</h1>
+      <p class="subtitle">A clear view of every product, batch, and stock level.</p>
+    </div>
+    <a class="button button-primary" href="medicine-form.html"><span>＋</span> Add medicine</a>
+  </section>
+
+  <section class="panel inventory-page-panel">
+    <div class="inventory-toolbar">
+      <form method="get" action="medicines.html" class="search-form" id="searchForm">
+        <span class="search-symbol">⌕</span>
+        <input type="search" name="q" id="searchInput" placeholder="Search name, batch, category…" aria-label="Search inventory">
+        <input type="hidden" name="stock" id="stockInput" disabled>
+        <button class="button button-dark" type="submit">Search</button>
+        <a class="clear-link" id="clearLink" href="medicines.html" hidden>Clear</a>
+      </form>
+      <div class="filter-chips" id="chips"></div>
+    </div>
+
+    <div id="listBox">
+      <p class="release-empty">Loading…</p>
+    </div>
+  </section>
+
+</div>
+
+<script src="js/logo-data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/layout.js"></script>
+<script>
+  (function () {
+    var params = new URLSearchParams(location.search);
+    var query = (params.get("q") || "").trim();
+    var stock = (params.get("stock") || "").trim();
+    var page = params.get("page") || "1";
+
+    function link(extra) {
+      var p = {};
+      if (query) p.q = query;
+      if (stock) p.stock = stock;
+      Object.keys(extra || {}).forEach(function (k) {
+        if (extra[k] === null) { delete p[k]; } else { p[k] = extra[k]; }
+      });
+      var s = new URLSearchParams(p).toString();
+      return "medicines.html" + (s ? "?" + s : "");
+    }
+
+    function renderToolbar() {
+      document.getElementById("searchInput").value = query;
+      var stockInput = document.getElementById("stockInput");
+      if (stock) { stockInput.value = stock; stockInput.disabled = false; }
+      document.getElementById("clearLink").hidden = !(query || stock);
+
+      var chips = [
+        { key: "", label: "All items" },
+        { key: "low", label: "Low stock" },
+        { key: "expiring", label: "Expiring soon" },
+        { key: "expired", label: "Expired" }
+      ];
+      document.getElementById("chips").innerHTML = chips.map(function (c) {
+        var href = link({ stock: c.key || null, page: null });
+        return '<a class="filter-chip' + (stock === c.key ? " selected" : "") +
+          '" href="' + esc(href) + '">' + c.label + "</a>";
+      }).join("");
+    }
+
+    function row(m) {
+      return "<tr>" +
+        '<td><div class="medicine-cell">' + medicineThumb(m) +
+          "<span><strong>" + esc(m.name) + "</strong><small>" +
+          esc(m.generic_name || "Generic name not set") + "</small></span></div></td>" +
+        "<td>" + esc(m.category) + "</td>" +
+        '<td class="muted-cell">' + esc(m.batch_number) + "</td>" +
+        '<td><span class="stock-number' + (m.quantity <= 10 ? " stock-low" : "") + '">' + esc(m.quantity) + "</span></td>" +
+        "<td>" + peso(m.unit_price) + "</td>" +
+        "<td>" + esc(fmtDate(m.expiry_date)) + "</td>" +
+        "<td>" + statusPill(m.status) + "</td>" +
+        '<td><div class="row-actions">' +
+          '<a class="icon-action" href="medicine-form.html?id=' + m.id + '" title="Edit ' + esc(m.name) +
+            '" aria-label="Edit ' + esc(m.name) + '">✎</a>' +
+          '<button class="icon-action danger-action" type="button" data-delete="' + m.id +
+            '" data-name="' + esc(m.name) + '" title="Delete ' + esc(m.name) +
+            '" aria-label="Delete ' + esc(m.name) + '">×</button>' +
+        "</div></td></tr>";
+    }
+
+    function render(data) {
+      var box = document.getElementById("listBox");
+
+      if (!data.results.length) {
+        box.innerHTML =
+          '<div class="empty-state"><div class="empty-icon">⌕</div><h3>No medicines found</h3>' +
+          "<p>Try a different search or add a medicine to your catalog.</p>" +
+          '<a class="button button-primary" href="medicine-form.html">Add medicine</a></div>';
+        return;
+      }
+
+      var prev = data.has_previous
+        ? '<a href="' + esc(link({ page: data.page - 1 })) + '">← Previous</a>' : "";
+      var next = data.has_next
+        ? '<a href="' + esc(link({ page: data.page + 1 })) + '">Next →</a>' : "";
+
+      box.innerHTML =
+        '<div class="table-wrap"><table><thead><tr>' +
+        "<th>Medicine</th><th>Category</th><th>Batch number</th><th>Quantity</th>" +
+        "<th>Unit price</th><th>Expiry date</th><th>Status</th><th>Actions</th>" +
+        "</tr></thead><tbody>" + data.results.map(row).join("") + "</tbody></table></div>" +
+        '<div class="table-footer"><span>Showing ' + data.start_index + "–" + data.end_index +
+        " of " + data.count + " items</span>" +
+        '<div class="pagination">' + prev + "<span>Page " + data.page + " of " + data.num_pages +
+        "</span>" + next + "</div></div>";
+    }
+
+    async function load() {
+      try {
+        render(await Api.listMedicines({ q: query, stock: stock, page: page }));
+      } catch (err) {
+        document.getElementById("listBox").innerHTML = "";
+        Layout.notify("error", err.message);
+      }
+    }
+
+    document.getElementById("listBox").addEventListener("click", async function (e) {
+      var btn = e.target.closest("[data-delete]");
+      if (!btn) return;
+      var name = btn.dataset.name;
+      if (!confirm("Delete " + name + " from inventory? This cannot be undone.")) return;
+
+      btn.disabled = true;
+      try {
+        var res = await Api.deleteMedicine(btn.dataset.delete);
+        Layout.clearNotices();
+        Layout.notify("success", res.message);
+        Layout.refreshSidebar();
+        load();
+      } catch (err) {
+        btn.disabled = false;
+        Layout.clearNotices();
+        Layout.notify("error", err.message);
+      }
+    });
+
+    Layout.ready.then(function (ok) {
+      if (!ok) return;
+      renderToolbar();
+      load();
+    });
+  })();
+</script>
+</body>
+</html>

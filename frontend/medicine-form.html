@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Medicine · MediCore Pharmacy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/extra.css">
+  <style>
+    /* Required field left empty (shown after the person touches it) */
+    .field.field-invalid input,
+    .field.field-invalid select {
+      border-color: #dc2626 !important;
+      background-color: #fef2f2 !important;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+    }
+    .field.field-invalid > span:first-child { color: #b91c1c; }
+    .field-error {
+      display: block;
+      margin-top: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #dc2626;
+    }
+
+    /* Batch number can never be edited */
+    #batchInput[readonly] {
+      background-color: #f1f5f9 !important;
+      color: #64748b;
+      cursor: not-allowed;
+    }
+
+    /* Save button while the form is incomplete */
+    #submitBtn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body data-page="medicine-form" data-nav="medicines" data-title="Add medicine"
+      data-parent-label="Medicine inventory" data-parent-href="medicines.html">
+<script>
+  // Edit mode when the address has ?id=123
+  if (new URLSearchParams(location.search).get("id")) {
+    document.body.dataset.title = "Edit medicine";
+  }
+</script>
+
+<div id="page-source" hidden>
+
+  <section class="welcome-row">
+    <div>
+      <div class="eyebrow"><span class="eyebrow-line"></span> INVENTORY MANAGEMENT</div>
+      <h1 id="formTitle">Add medicine</h1>
+      <p class="subtitle" id="formSubtitle">Create a new inventory record. The batch number is generated for you.</p>
+    </div>
+    <a class="button button-light" href="medicines.html">← Back to inventory</a>
+  </section>
+
+  <form class="form-layout" id="medicineForm" novalidate>
+    <section class="panel form-panel">
+      <div class="form-section-heading">
+        <span class="form-section-icon">✚</span>
+        <div>
+          <h2>Medicine details</h2>
+          <p>Fields marked with * are required.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <label class="field"><span>Medicine name <b>*</b></span>
+          <input name="name" maxlength="200" required placeholder="e.g. Biogesic">
+        </label>
+
+        <label class="field"><span>Generic name</span>
+          <input name="generic_name" maxlength="200" placeholder="e.g. Paracetamol">
+        </label>
+
+        <label class="field"><span>Category <b>*</b></span>
+          <select name="category" id="categorySelect" required></select>
+        </label>
+
+        <label class="field" id="newCategoryField" hidden><span>New category name <b>*</b></span>
+          <input name="new_category" id="newCategoryInput" maxlength="100" placeholder="e.g. Eye drops">
+        </label>
+
+        <label class="field"><span id="batchLabel">Batch number (auto)</span>
+          <input name="batch_number" id="batchInput" maxlength="100" required readonly>
+        </label>
+
+        <label class="field"><span>Supplier</span>
+          <input name="supplier" maxlength="200" placeholder="Supplier name (optional)">
+        </label>
+
+        <label class="field"><span>Quantity <b>*</b></span>
+          <input type="number" name="quantity" min="0" step="1" required placeholder="e.g. 100">
+        </label>
+
+        <label class="field"><span>Unit <b>*</b></span>
+          <select name="unit" id="unitSelect" required></select>
+        </label>
+
+        <label class="field"><span>Unit price (₱) <b>*</b></span>
+          <input type="number" name="unit_price" min="0.01" step="0.01" required placeholder="0.00">
+        </label>
+
+        <label class="field"><span>Expiry date <b>*</b></span>
+          <input type="date" name="expiry_date" required>
+        </label>
+
+        <div class="field field-wide"><span>Medicine photo</span>
+          <div class="photo-box">
+            <div class="photo-preview" id="photoPreview">No photo</div>
+            <div class="photo-controls">
+              <input type="file" name="image" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif">
+              <small>Optional. JPG, PNG, WEBP or GIF, up to 5 MB.</small>
+              <label class="photo-remove" id="removeWrap" hidden>
+                <input type="checkbox" name="remove_image" value="1"> Remove current photo
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-note"><span>ⓘ</span> Unit price must be greater than zero. Expired medicines cannot be released.</div>
+    </section>
+
+    <div class="form-actions">
+      <span class="form-hint" id="formHint">Fill in all required fields to add this medicine.</span>
+      <a class="button button-light" href="medicines.html">Cancel</a>
+      <button class="button button-primary" type="submit" id="submitBtn" disabled>Add medicine <span>→</span></button>
+    </div>
+  </form>
+
+</div>
+
+<script src="js/logo-data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/layout.js"></script>
+<script>
+  (function () {
+    var editId = new URLSearchParams(location.search).get("id");
+    var form = document.getElementById("medicineForm");
+    var categorySelect = document.getElementById("categorySelect");
+    var unitSelect = document.getElementById("unitSelect");
+    var newField = document.getElementById("newCategoryField");
+    var newInput = document.getElementById("newCategoryInput");
+    var fileInput = document.getElementById("imageInput");
+    var preview = document.getElementById("photoPreview");
+    var submitBtn = document.getElementById("submitBtn");
+    var hint = document.getElementById("formHint");
+
+    var touched = {};      // fields the person has already visited
+    var saving = false;    // true while the request is running
+    var blocked = false;   // true if the page data failed to load
+    var readyHint = "The new medicine will appear in your inventory.";
+    var waitingHint = "Fill in all required fields to add this medicine.";
+
+    /* ---------- validation ---------- */
+
+    function isFieldOk(el) {
+      var value = (el.value || "").trim();
+      if (value === "") return false;
+
+      if (el.name === "unit_price") {
+        var price = Number(value);
+        return !isNaN(price) && price > 0;
+      }
+      if (el.name === "quantity") {
+        var qty = Number(value);
+        if (isNaN(qty) || qty < 0 || Math.floor(qty) !== qty) return false;
+        return editId ? true : qty >= 1;   // a new medicine needs at least 1 in stock
+      }
+      return true;
+    }
+
+    function messageFor(el) {
+      if (el.name === "unit_price") return "Enter a price greater than zero.";
+      if (el.name === "quantity") return editId ? "Enter a whole number, 0 or more." : "Enter a quantity of 1 or more.";
+      if (el.tagName === "SELECT") return "Please choose an option.";
+      return "This field is required.";
+    }
+
+    function setInvalid(wrap, on, message) {
+      wrap.classList.toggle("field-invalid", on);
+      var err = wrap.querySelector(".field-error");
+      if (on) {
+        if (!err) {
+          err = document.createElement("small");
+          err.className = "field-error";
+          wrap.appendChild(err);
+        }
+        err.textContent = message;
+      } else if (err) {
+        err.remove();
+      }
+    }
+
+    // Re-checks every required field, paints the red state, and enables/disables the save button.
+    function refresh() {
+      var allOk = true;
+
+      Array.prototype.forEach.call(form.elements, function (el) {
+        if (!el.name || !el.required) return;
+        var wrap = el.closest(".field");
+        if (!wrap || wrap.hidden) return;
+
+        var ok = isFieldOk(el);
+        if (!ok) allOk = false;
+        setInvalid(wrap, !ok && !!touched[el.name], messageFor(el));
+      });
+
+      submitBtn.disabled = blocked || saving || !allOk;
+      if (!saving && hint) {
+        hint.textContent = allOk ? readyHint : waitingHint;
+      }
+      return allOk;
+    }
+
+    function markTouched(e) {
+      var el = e.target;
+      if (el && el.name) touched[el.name] = true;
+      refresh();
+    }
+
+    form.addEventListener("input", markTouched);
+    form.addEventListener("change", markTouched);
+    form.addEventListener("focusout", markTouched);
+
+    /* ---------- form setup ---------- */
+
+    function option(value, label, selected, disabled) {
+      var o = document.createElement("option");
+      o.value = value;
+      o.textContent = label;
+      if (selected) o.selected = true;
+      if (disabled) o.disabled = true;
+      return o;
+    }
+
+    function toggleNewCategory() {
+      var isNew = categorySelect.value === "__new__";
+      newField.hidden = !isNew;
+      newInput.required = isNew;
+    }
+
+    function setPreview(url, alt) {
+      preview.innerHTML = "";
+      if (!url) { preview.textContent = "No photo"; return; }
+      var img = document.createElement("img");
+      img.src = url;
+      img.alt = alt || "Medicine photo";
+      preview.appendChild(img);
+    }
+
+    function fill(opts, med) {
+      var selectedCategory = med ? med.category : "";
+
+      categorySelect.appendChild(option("", "Select a category", !selectedCategory, true));
+      opts.categories.forEach(function (c) {
+        categorySelect.appendChild(option(c, c, c === selectedCategory, false));
+      });
+      categorySelect.appendChild(option("__new__", "＋ Add new category…", false, false));
+
+      var selectedUnit = med ? med.unit : "tablet";
+      opts.units.forEach(function (u) {
+        unitSelect.appendChild(option(u.value, u.label, u.value === selectedUnit, false));
+      });
+
+      var batch = document.getElementById("batchInput");
+      if (med) {
+        form.elements.name.value = med.name;
+        form.elements.generic_name.value = med.generic_name;
+        form.elements.supplier.value = med.supplier;
+        form.elements.quantity.value = med.quantity;
+        form.elements.unit_price.value = med.unit_price;
+        form.elements.expiry_date.value = med.expiry_date;
+
+        // The batch number identifies this medicine, so it can never be changed here.
+        batch.value = med.batch_number;
+        batch.readOnly = true;
+        document.getElementById("batchLabel").textContent = "Batch number (locked)";
+
+        if (med.image_url) {
+          setPreview(med.image_url, med.name);
+          document.getElementById("removeWrap").hidden = false;
+        }
+        document.getElementById("formTitle").textContent = "Edit medicine";
+        document.getElementById("formSubtitle").textContent = "Update the details for this medicine. The batch number cannot be changed.";
+        submitBtn.innerHTML = "Save changes <span>→</span>";
+        readyHint = "Changes are saved right away.";
+        waitingHint = "Fill in all required fields to save your changes.";
+        document.title = "Edit medicine · MediCore Pharmacy";
+      } else {
+        batch.value = opts.next_batch_number;
+        document.title = "Add medicine · MediCore Pharmacy";
+      }
+
+      toggleNewCategory();
+      refresh();
+    }
+
+    categorySelect.addEventListener("change", toggleNewCategory);
+
+    // live photo preview
+    var originalPreview = null;
+    fileInput.addEventListener("change", function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (originalPreview === null) originalPreview = preview.innerHTML;
+
+      if (!file) { preview.innerHTML = originalPreview; return; }
+      if (!file.type || file.type.indexOf("image/") !== 0) {
+        fileInput.value = "";
+        preview.innerHTML = originalPreview;
+        Layout.clearNotices();
+        Layout.notify("error", "Please choose an image file.");
+        return;
+      }
+      setPreview(URL.createObjectURL(file), "Selected photo");
+    });
+
+    /* ---------- submit ---------- */
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      Layout.clearNotices();
+
+      // Safety net: if anything is still empty, show it in red instead of sending.
+      if (!refresh()) {
+        Array.prototype.forEach.call(form.elements, function (el) {
+          if (el.name) touched[el.name] = true;
+        });
+        refresh();
+        return;
+      }
+
+      var original = submitBtn.innerHTML;
+      saving = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving…";
+
+      var data = new FormData(form);
+      var name = (data.get("name") || "").toString().trim();
+
+      try {
+        if (editId) {
+          await Api.updateMedicine(editId, data);
+          Layout.flash("success", name + " was updated.");
+        } else {
+          await Api.createMedicine(data);
+          Layout.flash("success", name + " was added to inventory.");
+        }
+        location.href = "medicines.html";
+      } catch (err) {
+        var list = err.errors && err.errors.length ? err.errors : [err.message];
+        list.forEach(function (m) { Layout.notify("error", m); });
+        saving = false;
+        submitBtn.innerHTML = original;
+        refresh();
+      }
+    });
+
+    refresh();   // start with the save button disabled until the form is filled
+
+    Layout.ready.then(async function (ok) {
+      if (!ok) return;
+      try {
+        var opts = await Api.formOptions();
+        var med = null;
+        if (editId) med = (await Api.getMedicine(editId)).medicine;
+        fill(opts, med);
+      } catch (err) {
+        Layout.notify("error", err.message);
+        blocked = true;
+        refresh();
+      }
+    });
+  })();
+</script>
+</body>
+</html>
