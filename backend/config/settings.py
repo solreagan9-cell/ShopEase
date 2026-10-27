@@ -24,7 +24,7 @@ SECRET_KEY = 'django-insecure-#$m-@!jby8w821vo4o6v$^ro2=e-7bc+zz^ja2@mjrz_qrf%4^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['shopease-pb01.onrender.com', 'localhost', '127.0.0.1']
 
 
 # Application definition
