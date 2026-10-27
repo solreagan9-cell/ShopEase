@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Medicine · MediCore Pharmacy</title>
+  <title>Medicine · Saiver Pharmacy</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -25,6 +25,7 @@
       font-weight: 500;
       color: #dc2626;
     }
+    .field-hint { display: block; margin-top: 6px; font-size: 12.5px; color: #66758d; }
 
     /* Batch number can never be edited */
     #batchInput[readonly] {
@@ -32,6 +33,23 @@
       color: #64748b;
       cursor: not-allowed;
     }
+
+    /* Prescription checkbox */
+    .rx-check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      margin: 0;
+      padding: 10px 14px;
+      background: #fff;
+      border: 1px solid #d3dbe8;
+      border-radius: 10px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .rx-check:hover { border-color: #b6c2d6; }
+    .rx-check input { width: 18px; height: 18px; min-height: 0; }
 
     /* Save button while the form is incomplete */
     #submitBtn:disabled {
@@ -79,6 +97,14 @@
           <input name="generic_name" maxlength="200" placeholder="e.g. Paracetamol">
         </label>
 
+        <label class="field"><span>Strength</span>
+          <input name="strength" maxlength="50" placeholder="e.g. 500 mg">
+        </label>
+
+        <label class="field"><span>Dosage form</span>
+          <select name="dosage_form" id="dosageSelect"></select>
+        </label>
+
         <label class="field"><span>Category <b>*</b></span>
           <select name="category" id="categorySelect" required></select>
         </label>
@@ -95,6 +121,10 @@
           <input name="supplier" maxlength="200" placeholder="Supplier name (optional)">
         </label>
 
+        <label class="field"><span>Barcode</span>
+          <input name="barcode" maxlength="64" placeholder="Scan or type (optional)">
+        </label>
+
         <label class="field"><span>Quantity <b>*</b></span>
           <input type="number" name="quantity" min="0" step="1" required placeholder="e.g. 100">
         </label>
@@ -107,9 +137,21 @@
           <input type="number" name="unit_price" min="0.01" step="0.01" required placeholder="0.00">
         </label>
 
+        <label class="field"><span>Reorder level</span>
+          <input type="number" name="reorder_level" min="0" step="1" value="10" placeholder="10">
+          <small class="field-hint">You are warned when stock falls to this number or below.</small>
+        </label>
+
         <label class="field"><span>Expiry date <b>*</b></span>
           <input type="date" name="expiry_date" required>
         </label>
+
+        <div class="field"><span>Prescription</span>
+          <label class="rx-check">
+            <input type="checkbox" name="requires_prescription" value="1" id="rxCheck">
+            Prescription required (Rx)
+          </label>
+        </div>
 
         <div class="field field-wide"><span>Medicine photo</span>
           <div class="photo-box">
@@ -125,7 +167,7 @@
         </div>
       </div>
 
-      <div class="form-note"><span>ⓘ</span> Unit price must be greater than zero. Expired medicines cannot be released.</div>
+      <div class="form-note"><span>ⓘ</span> Unit price must be greater than zero. Expired medicines cannot be released. Prescription medicines need a prescription number when released.</div>
     </section>
 
     <div class="form-actions">
@@ -146,6 +188,7 @@
     var form = document.getElementById("medicineForm");
     var categorySelect = document.getElementById("categorySelect");
     var unitSelect = document.getElementById("unitSelect");
+    var dosageSelect = document.getElementById("dosageSelect");
     var newField = document.getElementById("newCategoryField");
     var newInput = document.getElementById("newCategoryInput");
     var fileInput = document.getElementById("imageInput");
@@ -270,14 +313,24 @@
         unitSelect.appendChild(option(u.value, u.label, u.value === selectedUnit, false));
       });
 
+      var selectedForm = med ? med.dosage_form : "";
+      dosageSelect.appendChild(option("", "Select (optional)", !selectedForm, false));
+      (opts.dosage_forms || []).forEach(function (d) {
+        dosageSelect.appendChild(option(d.value, d.label, d.value === selectedForm, false));
+      });
+
       var batch = document.getElementById("batchInput");
       if (med) {
         form.elements.name.value = med.name;
         form.elements.generic_name.value = med.generic_name;
+        form.elements.strength.value = med.strength || "";
+        form.elements.barcode.value = med.barcode || "";
         form.elements.supplier.value = med.supplier;
         form.elements.quantity.value = med.quantity;
         form.elements.unit_price.value = med.unit_price;
+        form.elements.reorder_level.value = med.reorder_level;
         form.elements.expiry_date.value = med.expiry_date;
+        document.getElementById("rxCheck").checked = !!med.requires_prescription;
 
         // The batch number identifies this medicine, so it can never be changed here.
         batch.value = med.batch_number;
@@ -293,10 +346,10 @@
         submitBtn.innerHTML = "Save changes <span>→</span>";
         readyHint = "Changes are saved right away.";
         waitingHint = "Fill in all required fields to save your changes.";
-        document.title = "Edit medicine · MediCore Pharmacy";
+        document.title = "Edit medicine · Saiver Pharmacy";
       } else {
         batch.value = opts.next_batch_number;
-        document.title = "Add medicine · MediCore Pharmacy";
+        document.title = "Add medicine · Saiver Pharmacy";
       }
 
       toggleNewCategory();

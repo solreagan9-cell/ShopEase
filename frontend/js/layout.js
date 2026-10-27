@@ -10,7 +10,8 @@ var Layout = (function () {
   var NAV = [
     { nav: "dashboard", href: "dashboard.html", icon: "▦", label: "Overview" },
     { nav: "medicines", href: "medicines.html", icon: "✚", label: "Medicine inventory" },
-    { nav: "release", href: "release.html", icon: "↗", label: "Release medicine" }
+    { nav: "release", href: "release.html", icon: "↗", label: "Release medicine" },
+    { nav: "history", href: "stock-history.html", icon: "▤", label: "Stock history" }
   ];
 
   /* ---------- notices ---------- */

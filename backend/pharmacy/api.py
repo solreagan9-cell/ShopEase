@@ -6,7 +6,7 @@ header, so no cookies or CSRF tokens are needed between the two apps.
 """
 import json
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from django.contrib.auth import authenticate, get_user_model
@@ -27,13 +27,26 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from . import views as legacy  # reuse the validation helpers from views.py
-from .models import Medicine, MedicineRelease
+from .models import Medicine, MedicineRelease, StockMovement
 
 User = get_user_model()
 
 TOKEN_SALT = "pharmacy.api.token"
 TOKEN_MAX_AGE = 60 * 60 * 24 * 7  # tokens last 7 days
-LOW_STOCK_LIMIT = 10
+DEFAULT_REORDER_LEVEL = 10
+
+DOSAGE_FORM_VALUES = {value for value, _label in Medicine.DOSAGE_FORMS}
+
+ADJUST_REASONS = {
+    "damaged": "Damaged",
+    "expired": "Expired / disposed",
+    "lost": "Lost or missing",
+    "count": "Stock count correction",
+    "returned": "Returned by customer",
+    "other": "Other",
+}
+REMOVE_REASONS = ("damaged", "expired", "lost", "count", "other")
+ADD_REASONS = ("count", "returned", "other")
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +120,7 @@ def medicine_json(request, medicine, today=None):
     today = today or date.today()
     if medicine.expiry_date < today:
         status = "expired"
-    elif medicine.quantity <= LOW_STOCK_LIMIT:
+    elif medicine.quantity <= medicine.reorder_level:
         status = "low"
     else:
         status = "good"
@@ -130,6 +143,12 @@ def medicine_json(request, medicine, today=None):
         "expiry_date": medicine.expiry_date.isoformat(),
         "image_url": image_url,
         "status": status,
+        "reorder_level": medicine.reorder_level,
+        "requires_prescription": medicine.requires_prescription,
+        "strength": medicine.strength,
+        "dosage_form": medicine.dosage_form,
+        "dosage_form_label": medicine.get_dosage_form_display() if medicine.dosage_form else "",
+        "barcode": medicine.barcode,
     }
 
 
@@ -145,10 +164,76 @@ def release_json(release):
     }
 
 
+def movement_json(movement):
+    return {
+        "id": movement.id,
+        "created_at": movement.created_at.isoformat(),
+        "medicine": movement.medicine_name,
+        "batch_number": movement.batch_number,
+        "kind": movement.kind,
+        "kind_label": movement.get_kind_display(),
+        "quantity_change": movement.quantity_change,
+        "quantity_after": movement.quantity_after,
+        "reason": movement.reason,
+        "supplier": movement.supplier,
+        "note": movement.note,
+        "by": movement.created_by.username if movement.created_by else "",
+    }
+
+
+def log_movement(medicine, kind, change, user, reason="", supplier="", note=""):
+    StockMovement.objects.create(
+        medicine=medicine,
+        medicine_name=medicine.name,
+        batch_number=medicine.batch_number,
+        kind=kind,
+        quantity_change=change,
+        quantity_after=medicine.quantity,
+        reason=reason[:60],
+        supplier=supplier[:200],
+        note=note[:255],
+        created_by=user,
+    )
+
+
+def parse_extras(request, errors):
+    """Read and validate the extra pharmacy fields from a multipart form."""
+    post = request.POST
+    strength = post.get("strength", "").strip()
+    dosage_form = post.get("dosage_form", "").strip()
+    barcode = post.get("barcode", "").strip()
+    raw_level = post.get("reorder_level", "").strip()
+    requires_rx = post.get("requires_prescription", "") in ("1", "on", "true", "True")
+
+    if len(strength) > 50:
+        errors.append("Strength is too long (50 characters at most).")
+    if dosage_form and dosage_form not in DOSAGE_FORM_VALUES:
+        errors.append("Choose a valid dosage form.")
+    if len(barcode) > 64:
+        errors.append("Barcode is too long (64 characters at most).")
+
+    reorder_level = DEFAULT_REORDER_LEVEL
+    if raw_level != "":
+        try:
+            reorder_level = int(raw_level)
+            if reorder_level < 0 or reorder_level > 100000:
+                errors.append("Reorder level must be between 0 and 100000.")
+        except ValueError:
+            errors.append("Reorder level must be a whole number.")
+
+    return {
+        "strength": strength,
+        "dosage_form": dosage_form,
+        "barcode": barcode,
+        "reorder_level": reorder_level,
+        "requires_prescription": requires_rx,
+    }
+
+
 def medicine_counts(today):
     qs = Medicine.objects.all()
     return {
-        "low": qs.filter(quantity__lte=LOW_STOCK_LIMIT).count(),
+        "low": qs.filter(quantity__lte=F("reorder_level")).count(),
         "expired": qs.filter(expiry_date__lt=today).count(),
         "expiring": qs.filter(
             expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30)
@@ -163,7 +248,7 @@ def sidebar_numbers(today):
         output_field=DecimalField(max_digits=14, decimal_places=2),
     )
     total = qs.count()
-    healthy = qs.filter(quantity__gt=LOW_STOCK_LIMIT, expiry_date__gte=today).count()
+    healthy = qs.filter(quantity__gt=F("reorder_level"), expiry_date__gte=today).count()
     value = qs.aggregate(v=Sum(money))["v"] or Decimal("0.00")
     counts = medicine_counts(today)
     return {
@@ -246,6 +331,23 @@ def dashboard_view(request):
     ctx = legacy._analytics_context()
     recent = Medicine.objects.order_by("-created_at")[:5]
 
+    qs = Medicine.objects.all()
+    total = qs.count()
+    counts = medicine_counts(today)
+    sidebar = sidebar_numbers(today)
+
+    # Stock status uses each medicine's own reorder level
+    not_expired = qs.filter(expiry_date__gte=today)
+    good_n = not_expired.filter(quantity__gt=F("reorder_level")).count()
+    low_n = not_expired.filter(quantity__gt=0, quantity__lte=F("reorder_level")).count()
+    out_n = not_expired.filter(quantity=0).count()
+
+    charts = dict(ctx["chart_data"])
+    charts["status"] = {
+        "labels": ["In stock", "Low stock", "Out of stock", "Expired"],
+        "values": [good_n, low_n, out_n, counts["expired"]],
+    }
+
     return JsonResponse({
         "kpis": {
             "inventory_value": float(ctx["inventory_value"]),
@@ -255,14 +357,14 @@ def dashboard_view(request):
             "released_week_value": float(ctx["released_week_value"]),
         },
         "rings": {
-            "healthy_pct": ctx["healthy_pct"],
+            "healthy_pct": sidebar["health_pct"],
             "fresh_pct": ctx["fresh_pct"],
-            "low_pct": ctx["low_pct"],
+            "low_pct": round(counts["low"] / total * 100) if total else 0,
         },
-        "counts": medicine_counts(today),
+        "counts": counts,
         "recent": [medicine_json(request, m, today) for m in recent],
-        "charts": ctx["chart_data"],
-        "sidebar": sidebar_numbers(today),
+        "charts": charts,
+        "sidebar": sidebar,
     })
 
 
@@ -277,6 +379,10 @@ def form_options_view(request):
         "units": [
             {"value": value, "label": label}
             for value, label in Medicine.UNIT_CHOICES
+        ],
+        "dosage_forms": [
+            {"value": value, "label": label}
+            for value, label in Medicine.DOSAGE_FORMS
         ],
         "next_batch_number": legacy.generate_batch_number(),
     })
@@ -298,10 +404,12 @@ def medicines_view(request):
                 | Q(category__icontains=query)
                 | Q(batch_number__icontains=query)
                 | Q(supplier__icontains=query)
+                | Q(barcode__icontains=query)
+                | Q(strength__icontains=query)
             )
 
         if stock_filter == "low":
-            medicines = medicines.filter(quantity__lte=LOW_STOCK_LIMIT)
+            medicines = medicines.filter(quantity__lte=F("reorder_level"))
         elif stock_filter == "expired":
             medicines = medicines.filter(expiry_date__lt=today)
         elif stock_filter == "expiring":
@@ -336,6 +444,7 @@ def medicines_view(request):
 
     quantity, unit_price, expiry_date = legacy._validate_common(values, errors)
     image = legacy._validate_image(request.FILES.get("image"), errors)
+    extras = parse_extras(request, errors)
 
     if Medicine.objects.filter(batch_number=values["batch_number"]).exists():
         errors.append("That batch number already exists.")
@@ -345,18 +454,25 @@ def medicines_view(request):
 
     legacy.save_category(category_name)
 
-    medicine = Medicine.objects.create(
-        name=values["name"],
-        generic_name=values["generic_name"],
-        category=category_name,
-        batch_number=values["batch_number"],
-        supplier=values["supplier"],
-        quantity=quantity,
-        unit=values["unit"],
-        unit_price=unit_price,
-        expiry_date=expiry_date,
-        image=image,
-    )
+    with transaction.atomic():
+        medicine = Medicine.objects.create(
+            name=values["name"],
+            generic_name=values["generic_name"],
+            category=category_name,
+            batch_number=values["batch_number"],
+            supplier=values["supplier"],
+            quantity=quantity,
+            unit=values["unit"],
+            unit_price=unit_price,
+            expiry_date=expiry_date,
+            image=image,
+            **extras,
+        )
+        if quantity > 0:
+            log_movement(
+                medicine, "initial", quantity, request.user,
+                reason="Initial stock", supplier=values["supplier"],
+            )
 
     return JsonResponse({"medicine": medicine_json(request, medicine, today)}, status=201)
 
@@ -397,6 +513,7 @@ def medicine_detail_view(request, pk):
 
     quantity, unit_price, expiry_date = legacy._validate_common(values, errors)
     new_image = legacy._validate_image(request.FILES.get("image"), errors)
+    extras = parse_extras(request, errors)
     remove_image = request.POST.get("remove_image") == "1"
 
     if errors:
@@ -404,8 +521,12 @@ def medicine_detail_view(request, pk):
 
     legacy.save_category(category_name)
 
+    old_quantity = medicine.quantity
+
     for field in ("name", "generic_name", "batch_number", "supplier", "unit"):
         setattr(medicine, field, values[field])
+    for field, value in extras.items():
+        setattr(medicine, field, value)
 
     medicine.category = category_name
     medicine.quantity = quantity
@@ -420,9 +541,180 @@ def medicine_detail_view(request, pk):
         medicine.image.delete(save=False)
         medicine.image = None
 
-    medicine.save()
+    with transaction.atomic():
+        medicine.save()
+        if quantity != old_quantity:
+            log_movement(
+                medicine, "adjustment", quantity - old_quantity, request.user,
+                reason="Edited in medicine form",
+            )
 
     return JsonResponse({"medicine": medicine_json(request, medicine, today)})
+
+
+@api(["POST"])
+def medicine_restock_view(request, pk):
+    """Receive a delivery: adds to the existing quantity and logs it."""
+    today = date.today()
+    data = json_body(request)
+    errors = []
+
+    try:
+        qty = int(data.get("quantity", 0))
+    except (TypeError, ValueError):
+        qty = 0
+    if qty < 1 or qty > 1000000:
+        errors.append("Enter a quantity between 1 and 1,000,000.")
+
+    supplier = str(data.get("supplier", "")).strip()
+    note = str(data.get("note", "")).strip()
+    if len(supplier) > 200:
+        errors.append("Supplier name is too long.")
+    if len(note) > 255:
+        errors.append("Note is too long.")
+
+    new_price = None
+    raw_price = str(data.get("unit_price", "")).strip()
+    if raw_price != "":
+        try:
+            new_price = Decimal(raw_price)
+            if (
+                not new_price.is_finite()
+                or new_price <= 0
+                or new_price.as_tuple().exponent < -2
+            ):
+                errors.append("Enter a valid price greater than zero, with at most 2 decimals.")
+        except InvalidOperation:
+            errors.append("Enter a valid unit price.")
+
+    if errors:
+        return fail(*errors)
+
+    with transaction.atomic():
+        med = Medicine.objects.select_for_update().filter(pk=pk).first()
+        if med is None:
+            return JsonResponse({"error": "Medicine not found."}, status=404)
+        if med.expiry_date < today:
+            return fail(
+                f"{med.name} is expired and cannot be restocked. "
+                "Add the new delivery as a new medicine batch instead."
+            )
+
+        med.quantity += qty
+        fields = ["quantity"]
+        if supplier:
+            med.supplier = supplier
+            fields.append("supplier")
+        if new_price is not None:
+            med.unit_price = new_price
+            fields.append("unit_price")
+        med.save(update_fields=fields)
+
+        log_movement(
+            med, "restock", qty, request.user,
+            reason="Delivery received", supplier=supplier or med.supplier, note=note,
+        )
+
+    return JsonResponse({
+        "message": f"Received {qty} {med.get_unit_display().lower()}(s) of {med.name}.",
+        "medicine": medicine_json(request, med, today),
+    })
+
+
+@api(["POST"])
+def medicine_adjust_view(request, pk):
+    """Add or remove stock for a reason (damaged, expired, count correction...)."""
+    today = date.today()
+    data = json_body(request)
+    errors = []
+
+    direction = str(data.get("direction", "")).strip()
+    reason_key = str(data.get("reason", "")).strip()
+    note = str(data.get("note", "")).strip()
+
+    try:
+        qty = int(data.get("quantity", 0))
+    except (TypeError, ValueError):
+        qty = 0
+
+    if direction not in ("add", "remove"):
+        errors.append("Choose whether to add or remove stock.")
+    if qty < 1 or qty > 1000000:
+        errors.append("Enter a quantity between 1 and 1,000,000.")
+
+    allowed = ADD_REASONS if direction == "add" else REMOVE_REASONS
+    if reason_key not in allowed:
+        errors.append("Choose a reason for this adjustment.")
+    if reason_key == "other" and not note:
+        errors.append("Please explain the reason in the note.")
+    if len(note) > 255:
+        errors.append("Note is too long.")
+
+    if errors:
+        return fail(*errors)
+
+    with transaction.atomic():
+        med = Medicine.objects.select_for_update().filter(pk=pk).first()
+        if med is None:
+            return JsonResponse({"error": "Medicine not found."}, status=404)
+
+        if direction == "remove":
+            if qty > med.quantity:
+                return fail(
+                    f"Only {med.quantity} {med.get_unit_display().lower()}(s) "
+                    f"in stock for {med.name}."
+                )
+            change = -qty
+        else:
+            change = qty
+
+        med.quantity += change
+        med.save(update_fields=["quantity"])
+
+        log_movement(
+            med, "adjustment", change, request.user,
+            reason=ADJUST_REASONS[reason_key], note=note,
+        )
+
+    verb = "Removed" if direction == "remove" else "Added"
+    return JsonResponse({
+        "message": f"{verb} {qty} {med.get_unit_display().lower()}(s) "
+                   f"{'from' if direction == 'remove' else 'to'} {med.name}.",
+        "medicine": medicine_json(request, med, today),
+    })
+
+
+@api(["GET"])
+def movements_view(request):
+    query = request.GET.get("q", "").strip()
+    kind = request.GET.get("kind", "").strip()
+
+    movements = StockMovement.objects.select_related("created_by")
+
+    if query:
+        movements = movements.filter(
+            Q(medicine_name__icontains=query)
+            | Q(batch_number__icontains=query)
+            | Q(reason__icontains=query)
+            | Q(note__icontains=query)
+            | Q(supplier__icontains=query)
+        )
+    if kind in dict(StockMovement.KIND_CHOICES):
+        movements = movements.filter(kind=kind)
+
+    paginator = Paginator(movements, 15)
+    page = paginator.get_page(request.GET.get("page"))
+
+    return JsonResponse({
+        "results": [movement_json(m) for m in page],
+        "page": page.number,
+        "num_pages": paginator.num_pages,
+        "count": paginator.count,
+        "start_index": page.start_index(),
+        "end_index": page.end_index(),
+        "has_previous": page.has_previous(),
+        "has_next": page.has_next(),
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +758,11 @@ def release_view(request):
             return fail("Quantity must be at least 1.")
         if med.expiry_date < today:
             return fail(f"{med.name} is expired and cannot be released.")
+        if med.requires_prescription and not note:
+            return fail(
+                f"{med.name} requires a prescription. "
+                "Enter the prescription number in the note field."
+            )
         if qty > med.quantity:
             return fail(
                 f"Only {med.quantity} {med.get_unit_display().lower()}(s) "
@@ -481,6 +778,16 @@ def release_view(request):
             released_to=released_to[:120],
             note=note[:255],
             released_by=request.user,
+        )
+
+        parts = []
+        if released_to:
+            parts.append("To " + released_to)
+        if note:
+            parts.append(note)
+        log_movement(
+            med, "release", -qty, request.user,
+            reason="Dispensed", note=" · ".join(parts),
         )
 
     return JsonResponse(

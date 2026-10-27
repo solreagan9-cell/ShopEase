@@ -29,6 +29,19 @@ class Medicine(models.Model):
         ("piece", "Piece"),
     ]
 
+    DOSAGE_FORMS = [
+        ("tablet", "Tablet"),
+        ("capsule", "Capsule"),
+        ("syrup", "Syrup"),
+        ("suspension", "Suspension"),
+        ("injection", "Injection"),
+        ("cream", "Cream / ointment"),
+        ("drops", "Drops"),
+        ("inhaler", "Inhaler"),
+        ("powder", "Powder / sachet"),
+        ("other", "Other"),
+    ]
+
     name = models.CharField(max_length=200)
     generic_name = models.CharField(max_length=200, blank=True)
     category = models.CharField(max_length=100)
@@ -43,6 +56,14 @@ class Medicine(models.Model):
     )
     expiry_date = models.DateField()
     image = models.ImageField(upload_to="medicines/", blank=True, null=True)
+
+    # Real-pharmacy details
+    reorder_level = models.PositiveIntegerField(default=10)
+    requires_prescription = models.BooleanField(default=False)
+    strength = models.CharField(max_length=50, blank=True)
+    dosage_form = models.CharField(max_length=30, choices=DOSAGE_FORMS, blank=True)
+    barcode = models.CharField(max_length=64, blank=True, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -78,3 +99,38 @@ class MedicineRelease(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.medicine.name}"
+
+
+class StockMovement(models.Model):
+    """One line in the stock history: every change to a medicine's quantity."""
+
+    KIND_CHOICES = [
+        ("initial", "Initial stock"),
+        ("restock", "Restock"),
+        ("adjustment", "Adjustment"),
+        ("release", "Release"),
+    ]
+
+    medicine = models.ForeignKey(
+        Medicine, null=True, blank=True, on_delete=models.SET_NULL, related_name="movements"
+    )
+    # Copies, so the history stays readable even if the medicine is deleted later
+    medicine_name = models.CharField(max_length=200)
+    batch_number = models.CharField(max_length=100)
+
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    quantity_change = models.IntegerField()
+    quantity_after = models.PositiveIntegerField()
+    reason = models.CharField(max_length=60, blank=True)
+    supplier = models.CharField(max_length=200, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.quantity_change:+d} {self.medicine_name}"

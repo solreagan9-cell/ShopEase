@@ -3,12 +3,59 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Release medicine · MediCore Pharmacy</title>
+  <title>Release medicine · Saiver Pharmacy</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/extra.css">
+  <style>
+    .rx-banner {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #ede9fe;
+      color: #4c1d95;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .rx-banner[hidden] { display: none; }
+
+    /* ---------- Receipt ---------- */
+    .rc-backdrop {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; overflow-y: auto;
+      background: rgba(14, 26, 47, 0.55);
+    }
+    .rc-box {
+      width: 100%; max-width: 400px; padding: 28px;
+      background: #fff; border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(14, 26, 47, 0.35);
+      font-size: 14px; color: #15203a;
+    }
+    .rc-head { text-align: center; padding-bottom: 14px; border-bottom: 2px dashed #d3dbe8; }
+    .rc-head h2 { margin: 0 0 2px; font-size: 20px; }
+    .rc-head p { margin: 0; font-size: 12.5px; color: #66758d; }
+    .rc-title { margin: 14px 0 10px; text-align: center; font-weight: 700; letter-spacing: 0.08em; font-size: 13px; }
+    .rc-row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; }
+    .rc-row span:first-child { color: #66758d; }
+    .rc-row span:last-child { font-weight: 600; text-align: right; }
+    .rc-total { margin-top: 10px; padding-top: 12px; border-top: 2px dashed #d3dbe8; font-size: 17px; }
+    .rc-total span:first-child { color: #15203a; font-weight: 700; }
+    .rc-foot { margin-top: 16px; text-align: center; font-size: 12.5px; color: #66758d; }
+    .rc-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    @media print {
+      body > .app-shell { display: none !important; }
+      .rc-backdrop { position: static; padding: 0; background: none; display: block; }
+      .rc-box { box-shadow: none; max-width: 360px; margin: 0 auto; padding: 0; }
+      .rc-actions { display: none !important; }
+    }
+  </style>
 </head>
 <body data-page="release" data-nav="release" data-title="Release medicine"
       data-parent-label="Medicine inventory" data-parent-href="medicines.html">
@@ -49,10 +96,12 @@
           <input name="released_to" maxlength="120" placeholder="Patient or customer (optional)">
         </label>
 
-        <label class="field field-wide"><span>Note</span>
-          <input name="note" maxlength="255" placeholder="Optional note, e.g. prescription no.">
+        <label class="field field-wide"><span>Note <b id="noteStar" hidden>*</b></span>
+          <input name="note" id="noteInput" maxlength="255" placeholder="Optional note, e.g. prescription no.">
         </label>
       </div>
+
+      <div class="rx-banner" id="rxBanner" hidden><span>℞</span> This medicine requires a prescription. Enter the prescription number in the note before releasing.</div>
 
       <div class="release-info" id="releaseInfo" hidden></div>
       <small class="release-empty" id="noStock" hidden style="display:block;padding:12px 0 0;color:#b45309;text-align:left;">
@@ -92,7 +141,10 @@
     var hint = document.getElementById("formHint");
     var select = document.getElementById("medicineSelect");
     var qty = document.getElementById("quantityInput");
+    var noteInput = document.getElementById("noteInput");
     var info = document.getElementById("releaseInfo");
+    var rxBanner = document.getElementById("rxBanner");
+    var noteStar = document.getElementById("noteStar");
 
     function selectedOption() {
       return select.selectedIndex > 0 ? select.options[select.selectedIndex] : null;
@@ -102,8 +154,12 @@
       var opt = selectedOption();
       var stock = opt ? parseInt(opt.dataset.stock, 10) : 0;
       var amount = parseInt(qty.value, 10);
+      var rx = !!opt && opt.dataset.rx === "1";
       var ok = false;
       var message = "Select a medicine and enter a quantity to enable releasing.";
+
+      rxBanner.hidden = !rx;
+      noteStar.hidden = !rx;
 
       if (opt) {
         qty.max = stock;
@@ -112,12 +168,15 @@
         info.hidden = false;
         info.textContent = stock + " " + opt.dataset.unit + "(s) in stock · ₱" +
           price.toFixed(2) + " each · expires " + opt.dataset.expiry +
+          (rx ? " · Rx required" : "") +
           (total ? " · This release: ₱" + total.toFixed(2) : "");
 
         if (isNaN(amount) || amount < 1) {
           message = "Enter a quantity of at least 1.";
         } else if (amount > stock) {
           message = "Only " + stock + " in stock. Lower the quantity.";
+        } else if (rx && !noteInput.value.trim()) {
+          message = "Enter the prescription number in the note.";
         } else {
           ok = true;
           message = "Ready to release.";
@@ -140,7 +199,12 @@
         o.dataset.unit = (m.unit_label || "").toLowerCase();
         o.dataset.price = m.unit_price;
         o.dataset.expiry = fmtDate(m.expiry_date);
-        o.textContent = m.name + " · " + m.batch_number + " · " + m.quantity + " in stock";
+        o.dataset.name = m.name;
+        o.dataset.batch = m.batch_number;
+        o.dataset.rx = m.requires_prescription ? "1" : "";
+        o.textContent = m.name + (m.strength ? " " + m.strength : "") +
+          (m.requires_prescription ? " (Rx)" : "") +
+          " · " + m.batch_number + " · " + m.quantity + " in stock";
         select.appendChild(o);
       });
       document.getElementById("noStock").hidden = list.length > 0;
@@ -165,6 +229,49 @@
         "<th>Released to</th><th>By</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
     }
 
+    /* ---------- receipt ---------- */
+
+    function showReceipt(res, r) {
+      var user = Layout.getUser();
+      var by = user ? (user.full_name || user.username) : "";
+      var refId = (res && (res.id || (res.release && res.release.id))) || "";
+      var total = r.quantity * r.price;
+      var now = new Date().toISOString();
+
+      function row(label, value) {
+        return '<div class="rc-row"><span>' + label + "</span><span>" + esc(value) + "</span></div>";
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "rc-backdrop";
+      wrap.id = "receiptModal";
+      wrap.innerHTML =
+        '<div class="rc-box" role="dialog" aria-modal="true" aria-label="Release receipt">' +
+          '<div class="rc-head"><h2>Saiver Pharmacy</h2><p>Inventory &amp; Management System</p></div>' +
+          '<div class="rc-title">RELEASE RECEIPT</div>' +
+          (refId ? row("Reference no.", "#" + refId) : "") +
+          row("Date", fmtDateTime(now)) +
+          row("Medicine", r.name) +
+          row("Batch", r.batch) +
+          row("Quantity", r.quantity + (r.unit ? " " + r.unit + "(s)" : "")) +
+          row("Price each", peso(r.price)) +
+          (r.to ? row("Released to", r.to) : "") +
+          (r.note ? row(r.rx ? "Prescription no." : "Note", r.note) : "") +
+          row("Released by", by || "—") +
+          '<div class="rc-row rc-total"><span>Total</span><span>' + peso(total) + "</span></div>" +
+          '<div class="rc-foot">Thank you. Please keep this receipt.</div>' +
+          '<div class="rc-actions">' +
+            '<button type="button" class="button button-light" id="rcDone">Done</button>' +
+            '<button type="button" class="button button-primary" id="rcPrint">Print receipt</button>' +
+          "</div>" +
+        "</div>";
+
+      document.body.appendChild(wrap);
+      document.getElementById("rcPrint").addEventListener("click", function () { window.print(); });
+      document.getElementById("rcDone").addEventListener("click", function () { location.reload(); });
+      document.getElementById("rcDone").focus();
+    }
+
     select.addEventListener("change", update);
     form.addEventListener("input", update);
 
@@ -174,6 +281,18 @@
       if (btn.disabled) return;
 
       Layout.clearNotices();
+      var opt = selectedOption();
+      var snapshot = {
+        name: opt.dataset.name,
+        batch: opt.dataset.batch,
+        unit: opt.dataset.unit,
+        rx: opt.dataset.rx === "1",
+        price: parseFloat(opt.dataset.price) || 0,
+        quantity: parseInt(qty.value, 10),
+        to: form.elements.released_to.value.trim(),
+        note: form.elements.note.value.trim()
+      };
+
       var original = btn.innerHTML;
       btn.disabled = true;
       btn.textContent = "Releasing…";
@@ -181,12 +300,12 @@
       try {
         var res = await Api.release({
           medicine: select.value,
-          quantity: parseInt(qty.value, 10),
+          quantity: snapshot.quantity,
           released_to: form.elements.released_to.value,
           note: form.elements.note.value
         });
         Layout.flash("success", res.message);
-        location.reload();
+        showReceipt(res, snapshot);
       } catch (err) {
         var list = err.errors && err.errors.length ? err.errors : [err.message];
         list.forEach(function (m) { Layout.notify("error", m); });

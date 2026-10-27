@@ -3,12 +3,76 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Medicine inventory · MediCore Pharmacy</title>
+  <title>Medicine inventory · Saiver Pharmacy</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/extra.css">
+  <style>
+    .head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+    .rx-tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 6px;
+      background: #ede9fe;
+      color: #5b21b6;
+      font-size: 11.5px;
+      font-weight: 700;
+      vertical-align: middle;
+    }
+    .reorder-note { display: block; font-size: 12px; color: #66758d; }
+
+    /* ---------- Popup windows (receive / adjust stock) ---------- */
+    .md-backdrop {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; overflow-y: auto;
+      background: rgba(14, 26, 47, 0.55);
+    }
+    .md-backdrop[hidden] { display: none; }
+    .md-box {
+      width: 100%; max-width: 460px; padding: 26px;
+      background: #fff; border-radius: 18px;
+      box-shadow: 0 24px 60px rgba(14, 26, 47, 0.35);
+    }
+    .md-box h3 { margin: 0 0 4px; font-size: 19px; }
+    .md-sub { margin: 0 0 16px; font-size: 13.5px; color: #66758d; }
+    .md-grid { display: grid; gap: 14px; }
+    .md-result {
+      margin-top: 16px; padding: 10px 14px; border-radius: 10px;
+      background: #f7f9fc; border: 1px solid #e1e7f0;
+      font-size: 14px; font-weight: 600; color: #15203a;
+    }
+    .md-error {
+      margin-top: 14px; padding: 10px 14px; border-radius: 10px;
+      background: #fef2f2; border: 1px solid #fbcaca; color: #991b1b;
+      font-size: 14px; font-weight: 500;
+    }
+    .md-error[hidden] { display: none; }
+    .md-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .md-box button:disabled { opacity: 0.55; cursor: not-allowed; }
+    @media (max-width: 520px) {
+      .md-actions { flex-direction: column-reverse; }
+      .md-actions > * { width: 100%; }
+    }
+
+    /* Print report (hidden on screen) */
+    #printSheet { display: none; }
+    @media print {
+      body > .app-shell { display: none !important; }
+      #printSheet { display: block; padding: 8px; color: #000; font-family: "DM Sans", Arial, sans-serif; }
+      #printSheet h1 { margin: 0 0 4px; font-size: 22px; }
+      #printSheet p { margin: 0 0 12px; color: #444; font-size: 12px; }
+      #printSheet table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      #printSheet th, #printSheet td { padding: 6px 8px; border: 1px solid #bbb; text-align: left; }
+      #printSheet th { background: #eee; }
+      #printSheet td.num, #printSheet th.num { text-align: right; }
+      #printSheet tfoot td { font-weight: 700; background: #f5f5f5; }
+    }
+  </style>
 </head>
 <body data-page="medicines" data-nav="medicines" data-title="Medicine inventory">
 
@@ -20,14 +84,18 @@
       <h1>Medicine inventory</h1>
       <p class="subtitle">A clear view of every product, batch, and stock level.</p>
     </div>
-    <a class="button button-primary" href="medicine-form.html"><span>＋</span> Add medicine</a>
+    <div class="head-actions">
+      <button class="button button-light" type="button" id="exportBtn">⭳ Export CSV</button>
+      <button class="button button-light" type="button" id="printBtn">⎙ Print report</button>
+      <a class="button button-primary" href="medicine-form.html"><span>＋</span> Add medicine</a>
+    </div>
   </section>
 
   <section class="panel inventory-page-panel">
     <div class="inventory-toolbar">
       <form method="get" action="medicines.html" class="search-form" id="searchForm">
         <span class="search-symbol">⌕</span>
-        <input type="search" name="q" id="searchInput" placeholder="Search name, batch, category…" aria-label="Search inventory">
+        <input type="search" name="q" id="searchInput" placeholder="Search name, batch, barcode, category…" aria-label="Search inventory">
         <input type="hidden" name="stock" id="stockInput" disabled>
         <button class="button button-dark" type="submit">Search</button>
         <a class="clear-link" id="clearLink" href="medicines.html" hidden>Clear</a>
@@ -40,6 +108,65 @@
     </div>
   </section>
 
+  <!-- Receive stock -->
+  <div class="md-backdrop" id="restockModal" hidden>
+    <form class="md-box" id="restockForm" novalidate role="dialog" aria-modal="true" aria-labelledby="restockTitle">
+      <h3 id="restockTitle">Receive stock</h3>
+      <p class="md-sub" id="restockSub"></p>
+      <div class="md-grid">
+        <label class="field"><span>Quantity received <b>*</b></span>
+          <input type="number" name="quantity" min="1" step="1" placeholder="e.g. 100">
+        </label>
+        <label class="field"><span>Supplier</span>
+          <input name="supplier" maxlength="200" placeholder="Supplier name">
+        </label>
+        <label class="field"><span>New unit price (₱)</span>
+          <input type="number" name="unit_price" min="0.01" step="0.01" placeholder="Leave blank to keep the current price">
+        </label>
+        <label class="field"><span>Note</span>
+          <input name="note" maxlength="255" placeholder="e.g. Invoice number">
+        </label>
+      </div>
+      <div class="md-result" id="restockResult"></div>
+      <div class="md-error" id="restockError" hidden></div>
+      <div class="md-actions">
+        <button type="button" class="button button-light" data-close>Cancel</button>
+        <button type="submit" class="button button-primary" id="restockBtn" disabled>Receive stock</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Adjust stock -->
+  <div class="md-backdrop" id="adjustModal" hidden>
+    <form class="md-box" id="adjustForm" novalidate role="dialog" aria-modal="true" aria-labelledby="adjustTitle">
+      <h3 id="adjustTitle">Adjust stock</h3>
+      <p class="md-sub" id="adjustSub"></p>
+      <div class="md-grid">
+        <label class="field"><span>Action <b>*</b></span>
+          <select name="direction">
+            <option value="remove">Remove stock</option>
+            <option value="add">Add stock</option>
+          </select>
+        </label>
+        <label class="field"><span>Quantity <b>*</b></span>
+          <input type="number" name="quantity" min="1" step="1" placeholder="e.g. 5">
+        </label>
+        <label class="field"><span>Reason <b>*</b></span>
+          <select name="reason"></select>
+        </label>
+        <label class="field"><span>Note <b id="adjustNoteStar" hidden>*</b></span>
+          <input name="note" maxlength="255" placeholder="Optional, required for “Other”">
+        </label>
+      </div>
+      <div class="md-result" id="adjustResult"></div>
+      <div class="md-error" id="adjustError" hidden></div>
+      <div class="md-actions">
+        <button type="button" class="button button-light" data-close>Cancel</button>
+        <button type="submit" class="button button-primary" id="adjustBtn" disabled>Save adjustment</button>
+      </div>
+    </form>
+  </div>
+
 </div>
 
 <script src="js/logo-data.js"></script>
@@ -51,6 +178,9 @@
     var query = (params.get("q") || "").trim();
     var stock = (params.get("stock") || "").trim();
     var page = params.get("page") || "1";
+
+    var FILTER_NAMES = { "": "All items", low: "Low stock", expiring: "Expiring soon", expired: "Expired" };
+    var items = {};   // medicines on the current page, by id
 
     function link(extra) {
       var p = {};
@@ -83,17 +213,28 @@
     }
 
     function row(m) {
+      var lowStock = m.quantity <= m.reorder_level;
+      var details = [m.generic_name, m.strength, m.dosage_form_label].filter(Boolean).join(" · ");
+
       return "<tr>" +
         '<td><div class="medicine-cell">' + medicineThumb(m) +
-          "<span><strong>" + esc(m.name) + "</strong><small>" +
-          esc(m.generic_name || "Generic name not set") + "</small></span></div></td>" +
+          "<span><strong>" + esc(m.name) + "</strong>" +
+          (m.requires_prescription ? '<span class="rx-tag" title="Prescription required">Rx</span>' : "") +
+          "<small>" + esc(details || "Generic name not set") + "</small></span></div></td>" +
         "<td>" + esc(m.category) + "</td>" +
         '<td class="muted-cell">' + esc(m.batch_number) + "</td>" +
-        '<td><span class="stock-number' + (m.quantity <= 10 ? " stock-low" : "") + '">' + esc(m.quantity) + "</span></td>" +
+        '<td><span class="stock-number' + (lowStock ? " stock-low" : "") + '">' + esc(m.quantity) + "</span>" +
+          '<span class="reorder-note">reorder at ' + esc(m.reorder_level) + "</span></td>" +
         "<td>" + peso(m.unit_price) + "</td>" +
         "<td>" + esc(fmtDate(m.expiry_date)) + "</td>" +
         "<td>" + statusPill(m.status) + "</td>" +
         '<td><div class="row-actions">' +
+          (m.status !== "expired"
+            ? '<button class="icon-action" type="button" data-restock="' + m.id +
+              '" title="Receive stock" aria-label="Receive stock for ' + esc(m.name) + '">＋</button>'
+            : "") +
+          '<button class="icon-action" type="button" data-adjust="' + m.id +
+            '" title="Adjust stock" aria-label="Adjust stock for ' + esc(m.name) + '">⇅</button>' +
           '<a class="icon-action" href="medicine-form.html?id=' + m.id + '" title="Edit ' + esc(m.name) +
             '" aria-label="Edit ' + esc(m.name) + '">✎</a>' +
           '<button class="icon-action danger-action" type="button" data-delete="' + m.id +
@@ -104,6 +245,8 @@
 
     function render(data) {
       var box = document.getElementById("listBox");
+      items = {};
+      data.results.forEach(function (m) { items[m.id] = m; });
 
       if (!data.results.length) {
         box.innerHTML =
@@ -138,7 +281,317 @@
       }
     }
 
+    /* ---------- popup windows ---------- */
+
+    var restockModal = document.getElementById("restockModal");
+    var restockForm = document.getElementById("restockForm");
+    var restockBtn = document.getElementById("restockBtn");
+    var adjustModal = document.getElementById("adjustModal");
+    var adjustForm = document.getElementById("adjustForm");
+    var adjustBtn = document.getElementById("adjustBtn");
+    var current = null;
+
+    var REASONS = {
+      remove: [["damaged", "Damaged"], ["expired", "Expired / disposed"], ["lost", "Lost or missing"],
+               ["count", "Stock count correction"], ["other", "Other (explain in note)"]],
+      add: [["count", "Stock count correction"], ["returned", "Returned by customer"],
+            ["other", "Other (explain in note)"]]
+    };
+
+    function closeModals() {
+      restockModal.hidden = true;
+      adjustModal.hidden = true;
+      current = null;
+    }
+
+    [restockModal, adjustModal].forEach(function (modal) {
+      modal.addEventListener("click", function (e) {
+        if (e.target === modal || e.target.closest("[data-close]")) closeModals();
+      });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeModals();
+    });
+
+    function unitOf(m) { return (m.unit_label || m.unit || "").toLowerCase(); }
+
+    function wholeNumber(value) {
+      var n = Number(String(value).trim());
+      return String(value).trim() !== "" && Number.isInteger(n) ? n : NaN;
+    }
+
+    function showError(id, errors) {
+      var box = document.getElementById(id);
+      box.textContent = errors.join(" ");
+      box.hidden = false;
+    }
+
+    /* Receive stock */
+    function openRestock(m) {
+      current = m;
+      restockForm.reset();
+      restockForm.elements.supplier.value = m.supplier || "";
+      document.getElementById("restockSub").textContent =
+        m.name + " · " + m.batch_number + " · " + m.quantity + " " + unitOf(m) + "(s) in stock";
+      document.getElementById("restockError").hidden = true;
+      updateRestock();
+      restockModal.hidden = false;
+      restockForm.elements.quantity.focus();
+    }
+
+    function updateRestock() {
+      var n = wholeNumber(restockForm.elements.quantity.value);
+      var ok = !isNaN(n) && n >= 1;
+      restockBtn.disabled = !ok;
+      document.getElementById("restockResult").textContent = ok
+        ? "Stock after receiving: " + (current.quantity + n) + " " + unitOf(current) + "(s)"
+        : "Enter how many were received.";
+    }
+
+    restockForm.addEventListener("input", updateRestock);
+
+    restockForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      updateRestock();
+      if (restockBtn.disabled) return;
+
+      var original = restockBtn.textContent;
+      restockBtn.disabled = true;
+      restockBtn.textContent = "Saving…";
+      document.getElementById("restockError").hidden = true;
+
+      try {
+        var res = await Api.restock(current.id, {
+          quantity: wholeNumber(restockForm.elements.quantity.value),
+          supplier: restockForm.elements.supplier.value,
+          unit_price: restockForm.elements.unit_price.value,
+          note: restockForm.elements.note.value
+        });
+        closeModals();
+        Layout.clearNotices();
+        Layout.notify("success", res.message);
+        Layout.refreshSidebar();
+        load();
+      } catch (err) {
+        showError("restockError", err.errors && err.errors.length ? err.errors : [err.message]);
+        restockBtn.textContent = original;
+        updateRestock();
+        return;
+      }
+      restockBtn.textContent = original;
+    });
+
+    /* Adjust stock */
+    function fillReasons() {
+      var select = adjustForm.elements.reason;
+      var direction = adjustForm.elements.direction.value;
+      select.innerHTML = '<option value="" disabled selected>Select a reason</option>' +
+        REASONS[direction].map(function (r) {
+          return '<option value="' + r[0] + '">' + r[1] + "</option>";
+        }).join("");
+    }
+
+    function openAdjust(m) {
+      current = m;
+      adjustForm.reset();
+      fillReasons();
+      document.getElementById("adjustSub").textContent =
+        m.name + " · " + m.batch_number + " · " + m.quantity + " " + unitOf(m) + "(s) in stock";
+      document.getElementById("adjustError").hidden = true;
+      updateAdjust();
+      adjustModal.hidden = false;
+      adjustForm.elements.quantity.focus();
+    }
+
+    function updateAdjust() {
+      var direction = adjustForm.elements.direction.value;
+      var n = wholeNumber(adjustForm.elements.quantity.value);
+      var reason = adjustForm.elements.reason.value;
+      var note = adjustForm.elements.note.value.trim();
+
+      document.getElementById("adjustNoteStar").hidden = reason !== "other";
+
+      var message = "Enter the quantity to " + direction + ".";
+      var ok = false;
+
+      if (!isNaN(n) && n >= 1) {
+        if (direction === "remove" && n > current.quantity) {
+          message = "Only " + current.quantity + " in stock.";
+        } else if (!reason) {
+          message = "Choose a reason.";
+        } else if (reason === "other" && !note) {
+          message = "Explain the reason in the note.";
+        } else {
+          ok = true;
+          var after = direction === "remove" ? current.quantity - n : current.quantity + n;
+          message = "Stock after adjustment: " + after + " " + unitOf(current) + "(s)";
+        }
+      }
+
+      adjustBtn.disabled = !ok;
+      document.getElementById("adjustResult").textContent = message;
+    }
+
+    adjustForm.elements.direction.addEventListener("change", function () {
+      fillReasons();
+      updateAdjust();
+    });
+    adjustForm.addEventListener("input", updateAdjust);
+    adjustForm.addEventListener("change", updateAdjust);
+
+    adjustForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      updateAdjust();
+      if (adjustBtn.disabled) return;
+
+      var original = adjustBtn.textContent;
+      adjustBtn.disabled = true;
+      adjustBtn.textContent = "Saving…";
+      document.getElementById("adjustError").hidden = true;
+
+      try {
+        var res = await Api.adjust(current.id, {
+          direction: adjustForm.elements.direction.value,
+          quantity: wholeNumber(adjustForm.elements.quantity.value),
+          reason: adjustForm.elements.reason.value,
+          note: adjustForm.elements.note.value
+        });
+        closeModals();
+        Layout.clearNotices();
+        Layout.notify("success", res.message);
+        Layout.refreshSidebar();
+        load();
+      } catch (err) {
+        showError("adjustError", err.errors && err.errors.length ? err.errors : [err.message]);
+        adjustBtn.textContent = original;
+        updateAdjust();
+        return;
+      }
+      adjustBtn.textContent = original;
+    });
+
+    /* ---------- reports: export and print ---------- */
+
+    // Fetches every page of the current search/filter, not just the visible one.
+    async function fetchAll() {
+      var all = [];
+      var p = 1;
+      var data;
+      do {
+        data = await Api.listMedicines({ q: query, stock: stock, page: p });
+        all = all.concat(data.results);
+        p++;
+      } while (data.has_next && p < 200);
+      return all;
+    }
+
+    function statusText(m) {
+      if (m.status === "expired") return "Expired";
+      if (m.status === "low") return "Low stock";
+      return "In stock";
+    }
+
+    function csvCell(value) {
+      var s = String(value == null ? "" : value);
+      if (/^[=+\-@]/.test(s)) s = "'" + s;   // stops spreadsheet formula injection
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+
+    function todayStamp() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    async function withBusy(button, label, task) {
+      var original = button.innerHTML;
+      button.disabled = true;
+      button.textContent = label;
+      try {
+        await task();
+      } catch (err) {
+        Layout.clearNotices();
+        Layout.notify("error", err.message);
+      }
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+
+    document.getElementById("exportBtn").addEventListener("click", function () {
+      withBusy(this, "Preparing…", async function () {
+        var list = await fetchAll();
+        if (!list.length) { Layout.notify("error", "There is nothing to export."); return; }
+
+        var lines = [["Medicine", "Generic name", "Strength", "Dosage form", "Category", "Batch number",
+                      "Barcode", "Prescription", "Quantity", "Unit", "Reorder level", "Unit price",
+                      "Stock value", "Expiry date", "Status"].map(csvCell).join(",")];
+        list.forEach(function (m) {
+          lines.push([
+            m.name, m.generic_name, m.strength, m.dosage_form_label, m.category, m.batch_number,
+            m.barcode, m.requires_prescription ? "Rx" : "", m.quantity, m.unit_label || m.unit || "",
+            m.reorder_level, Number(m.unit_price).toFixed(2),
+            (m.quantity * Number(m.unit_price)).toFixed(2), m.expiry_date, statusText(m)
+          ].map(csvCell).join(","));
+        });
+
+        var blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "saiver-inventory-" + todayStamp() + ".csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      });
+    });
+
+    document.getElementById("printBtn").addEventListener("click", function () {
+      withBusy(this, "Preparing…", async function () {
+        var list = await fetchAll();
+        if (!list.length) { Layout.notify("error", "There is nothing to print."); return; }
+
+        var totalValue = 0;
+        var rows = list.map(function (m) {
+          var value = m.quantity * Number(m.unit_price);
+          totalValue += value;
+          return "<tr><td>" + esc(m.name) + (m.strength ? " " + esc(m.strength) : "") +
+            (m.requires_prescription ? " (Rx)" : "") + "</td><td>" + esc(m.category) + "</td><td>" +
+            esc(m.batch_number) + '</td><td class="num">' + esc(m.quantity) + '</td><td class="num">' +
+            peso(m.unit_price) + '</td><td class="num">' + peso(value) + "</td><td>" +
+            esc(fmtDate(m.expiry_date)) + "</td><td>" + statusText(m) + "</td></tr>";
+        }).join("");
+
+        var filterText = FILTER_NAMES[stock] || "All items";
+        var sheet = document.createElement("div");
+        sheet.id = "printSheet";
+        sheet.innerHTML =
+          "<h1>Saiver Pharmacy: Inventory report</h1>" +
+          "<p>" + esc(filterText) + (query ? ' · Search: "' + esc(query) + '"' : "") +
+          " · " + list.length + " item" + (list.length === 1 ? "" : "s") +
+          " · Printed " + esc(fmtDateTime(new Date().toISOString())) + "</p>" +
+          "<table><thead><tr><th>Medicine</th><th>Category</th><th>Batch</th>" +
+          '<th class="num">Qty</th><th class="num">Unit price</th><th class="num">Value</th>' +
+          "<th>Expiry</th><th>Status</th></tr></thead><tbody>" + rows + "</tbody>" +
+          '<tfoot><tr><td colspan="5">Total inventory value</td><td class="num">' + peso(totalValue) +
+          "</td><td colspan=\"2\"></td></tr></tfoot></table>";
+
+        document.body.appendChild(sheet);
+        var cleanup = function () {
+          sheet.remove();
+          window.removeEventListener("afterprint", cleanup);
+        };
+        window.addEventListener("afterprint", cleanup);
+        window.print();
+      });
+    });
+
+    /* ---------- row buttons ---------- */
+
     document.getElementById("listBox").addEventListener("click", async function (e) {
+      var restockTarget = e.target.closest("[data-restock]");
+      if (restockTarget) { openRestock(items[restockTarget.dataset.restock]); return; }
+
+      var adjustTarget = e.target.closest("[data-adjust]");
+      if (adjustTarget) { openAdjust(items[adjustTarget.dataset.adjust]); return; }
+
       var btn = e.target.closest("[data-delete]");
       if (!btn) return;
       var name = btn.dataset.name;

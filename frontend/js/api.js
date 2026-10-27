@@ -158,6 +158,10 @@ var Api = (function () {
     deleteMedicine: function (id) { return request("/medicines/" + id + "/", { method: "DELETE" }); },
 
     releaseOptions: function () { return request("/release/"); },
+        restock: function (id, payload) { return request("/medicines/" + id + "/restock/", { method: "POST", json: payload }); },
+    adjust: function (id, payload) { return request("/medicines/" + id + "/adjust/", { method: "POST", json: payload }); },
+    movements: function (params) { return request("/movements/" + query(params)); },
+
     release: function (payload) { return request("/release/", { method: "POST", json: payload }); }
   };
 })();

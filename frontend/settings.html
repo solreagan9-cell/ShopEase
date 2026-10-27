@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/extra.css">
   <style>
+    /* ---------- Invalid fields ---------- */
     .field.field-invalid input {
       border-color: #dc2626 !important;
       background-color: #fef2f2 !important;
@@ -29,7 +30,203 @@
       cursor: not-allowed;
     }
     .settings-gap { margin-top: 28px; }
+
+    /* ---------- Account summary card ---------- */
+    .account-card {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      flex-wrap: wrap;
+      padding: 26px 28px;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, #0e1a2f 0%, #17325f 100%);
+      border: 0;
+      color: #fff;
+    }
+    .account-avatar {
+      width: 76px;
+      height: 76px;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #2563ff, #5b8cff);
+      border: 3px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .account-info { flex: 1; min-width: 200px; }
+    .account-info h2 { margin: 0 0 2px; color: #fff; font-size: 22px; }
+    .account-info p { margin: 0 0 10px; color: #aebbd3; font-size: 14px; }
+    .account-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+    .acct-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.12);
+      color: #dbe6ff;
+    }
+    .acct-badge.is-active { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+    .acct-badge.is-active::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+    .account-meta { display: flex; gap: 28px; margin: 0; flex-wrap: wrap; }
+    .account-meta div[hidden] { display: none; }
+    .account-meta dt { margin: 0 0 2px; font-size: 12px; color: #8ea2c8; font-weight: 500; }
+    .account-meta dd { margin: 0; font-size: 14px; font-weight: 600; color: #fff; }
+
+    /* ---------- Section icons ---------- */
+    .form-section-icon svg { width: 20px; height: 20px; }
+
+    /* ---------- Buttons ---------- */
     #profileBtn:disabled, #passwordBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .button-ghost {
+      background: transparent;
+      color: var(--muted, #66758d);
+      border-color: transparent;
+      box-shadow: none;
+    }
+    .button-ghost:hover { background: #eaeff6; color: var(--text, #15203a); }
+    .button-ghost[hidden] { display: none; }
+
+    /* ---------- Password fields ---------- */
+    .pw-wrap { position: relative; }
+    .pw-wrap input { padding-right: 70px; }
+    .pw-toggle {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      min-height: 0;
+      padding: 6px 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--primary, #1f5eff);
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: none;
+    }
+    .pw-toggle:hover { background: var(--primary-soft, #e7eeff); color: var(--primary-dark, #1648cc); }
+
+    /* ---------- Strength meter ---------- */
+    .strength { margin-top: 12px; }
+    .strength-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--muted, #66758d);
+      margin-bottom: 6px;
+    }
+    .strength-top strong { font-weight: 700; color: var(--text, #15203a); }
+    .strength-bar { height: 6px; background: #e8edf5; border-radius: 999px; overflow: hidden; }
+    .strength-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 999px;
+      background: #ef4444;
+      transition: width 0.25s ease, background 0.25s ease;
+    }
+    .strength-fill.s-fair { background: #f59e0b; }
+    .strength-fill.s-good { background: #3b82f6; }
+    .strength-fill.s-strong { background: #16a34a; }
+
+    /* ---------- Requirements checklist ---------- */
+    .rules {
+      list-style: none;
+      margin: 16px 0 0;
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 20px;
+      background: #f7f9fc;
+      border: 1px solid var(--border, #e1e7f0);
+      border-radius: 12px;
+      font-size: 13.5px;
+      color: var(--muted, #66758d);
+    }
+    .rules li { display: flex; align-items: center; gap: 8px; }
+    .rules li::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      border: 2px solid #c5cfdf;
+      background: #fff;
+      transition: all 0.15s;
+    }
+    .rules li.ok { color: #166534; font-weight: 500; }
+    .rules li.ok::before {
+      border-color: #16a34a;
+      background: #16a34a url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M4 8.5l2.7 2.7L12 5.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / 12px no-repeat;
+    }
+
+    /* ---------- Security tips ---------- */
+    .tip-note {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--primary-soft, #e7eeff);
+      color: #28418f;
+      font-size: 14px;
+    }
+
+    /* ---------- Confirmation dialog ---------- */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(14, 26, 47, 0.55);
+      backdrop-filter: blur(3px);
+    }
+    .modal-backdrop[hidden] { display: none; }
+    .modal-box {
+      width: 100%;
+      max-width: 420px;
+      padding: 28px;
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 24px 60px rgba(14, 26, 47, 0.35);
+    }
+    .modal-icon {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 14px;
+      border-radius: 14px;
+      background: var(--primary-soft, #e7eeff);
+      color: var(--primary-dark, #1648cc);
+    }
+    .modal-icon svg { width: 24px; height: 24px; }
+    .modal-box h3 { margin: 0 0 6px; font-size: 19px; }
+    .modal-box p { margin: 0 0 22px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+    @media (max-width: 640px) {
+      .rules { grid-template-columns: 1fr; }
+      .account-card { padding: 20px; }
+      .modal-actions { flex-direction: column-reverse; }
+      .modal-actions > * { width: 100%; }
+    }
   </style>
 </head>
 <body data-page="settings" data-nav="settings" data-title="Settings"
@@ -41,16 +238,35 @@
     <div>
       <div class="eyebrow"><span class="eyebrow-line"></span> ACCOUNT</div>
       <h1>Settings</h1>
-      <p class="subtitle">Update your name and change your password.</p>
+      <p class="subtitle">Manage your profile and keep your account secure.</p>
     </div>
     <a class="button button-light" href="dashboard.html">← Back to overview</a>
+  </section>
+
+  <!-- Account summary -->
+  <section class="panel account-card">
+    <div class="account-avatar" id="accountAvatar">A</div>
+    <div class="account-info">
+      <h2 id="accountName">Loading…</h2>
+      <p id="accountUser">&nbsp;</p>
+      <div class="account-badges">
+        <span class="acct-badge" id="roleBadge" hidden></span>
+        <span class="acct-badge is-active">Active account</span>
+      </div>
+    </div>
+    <dl class="account-meta">
+      <div id="lastLoginWrap" hidden><dt>Last sign-in</dt><dd id="lastLoginText">—</dd></div>
+      <div id="memberSinceWrap" hidden><dt>Member since</dt><dd id="memberSinceText">—</dd></div>
+    </dl>
   </section>
 
   <!-- Profile -->
   <form class="form-layout" id="profileForm" novalidate>
     <section class="panel form-panel">
       <div class="form-section-heading">
-        <span class="form-section-icon">✚</span>
+        <span class="form-section-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+        </span>
         <div>
           <h2>Profile</h2>
           <p>Your username is used to sign in and cannot be changed.</p>
@@ -75,6 +291,7 @@
 
     <div class="form-actions">
       <span class="form-hint" id="profileHint">Change your name to enable saving.</span>
+      <button class="button button-ghost" type="button" id="discardBtn" hidden>Discard changes</button>
       <button class="button button-primary" type="submit" id="profileBtn" disabled>Save changes</button>
     </div>
   </form>
@@ -83,7 +300,9 @@
   <form class="form-layout settings-gap" id="passwordForm" novalidate>
     <section class="panel form-panel">
       <div class="form-section-heading">
-        <span class="form-section-icon">✚</span>
+        <span class="form-section-icon teal-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        </span>
         <div>
           <h2>Change password</h2>
           <p>Enter your current password, then choose a new one.</p>
@@ -92,17 +311,41 @@
 
       <div class="form-grid">
         <label class="field field-wide"><span>Current password <b>*</b></span>
-          <input type="password" name="current_password" autocomplete="current-password">
+          <div class="pw-wrap">
+            <input type="password" name="current_password" autocomplete="current-password">
+            <button type="button" class="pw-toggle" data-toggle="current_password" aria-label="Show password">Show</button>
+          </div>
         </label>
 
         <label class="field"><span>New password <b>*</b></span>
-          <input type="password" name="new_password" autocomplete="new-password">
+          <div class="pw-wrap">
+            <input type="password" name="new_password" autocomplete="new-password">
+            <button type="button" class="pw-toggle" data-toggle="new_password" aria-label="Show password">Show</button>
+          </div>
         </label>
 
         <label class="field"><span>Confirm new password <b>*</b></span>
-          <input type="password" name="confirm_password" autocomplete="new-password">
+          <div class="pw-wrap">
+            <input type="password" name="confirm_password" autocomplete="new-password">
+            <button type="button" class="pw-toggle" data-toggle="confirm_password" aria-label="Show password">Show</button>
+          </div>
         </label>
       </div>
+
+      <div class="strength" aria-live="polite">
+        <div class="strength-top"><span>Password strength</span><strong id="strengthText">—</strong></div>
+        <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+      </div>
+
+      <ul class="rules" id="rules">
+        <li data-rule="length">At least 8 characters</li>
+        <li data-rule="case">Upper and lowercase letters</li>
+        <li data-rule="number">At least one number</li>
+        <li data-rule="match">Both new passwords match</li>
+        <li data-rule="diff">Different from current password</li>
+      </ul>
+
+      <div class="tip-note"><span>ⓘ</span> Use a password you don't use on other websites. Never share it with anyone.</div>
     </section>
 
     <div class="form-actions">
@@ -110,6 +353,21 @@
       <button class="button button-primary" type="submit" id="passwordBtn" disabled>Change password</button>
     </div>
   </form>
+
+  <!-- Confirm password change -->
+  <div class="modal-backdrop" id="confirmModal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <h3 id="confirmTitle">Change your password?</h3>
+      <p>Your new password will be used the next time you sign in.</p>
+      <div class="modal-actions">
+        <button class="button button-light" type="button" id="confirmCancel">Cancel</button>
+        <button class="button button-primary" type="button" id="confirmOk">Yes, change it</button>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -122,10 +380,25 @@
     var passwordForm = document.getElementById("passwordForm");
     var profileBtn = document.getElementById("profileBtn");
     var passwordBtn = document.getElementById("passwordBtn");
+    var discardBtn = document.getElementById("discardBtn");
     var profileHint = document.getElementById("profileHint");
     var passwordHint = document.getElementById("passwordHint");
 
+    var accountAvatar = document.getElementById("accountAvatar");
+    var accountName = document.getElementById("accountName");
+    var accountUser = document.getElementById("accountUser");
+    var roleBadge = document.getElementById("roleBadge");
+
+    var strengthFill = document.getElementById("strengthFill");
+    var strengthText = document.getElementById("strengthText");
+    var rulesList = document.getElementById("rules");
+
+    var confirmModal = document.getElementById("confirmModal");
+    var confirmOk = document.getElementById("confirmOk");
+    var confirmCancel = document.getElementById("confirmCancel");
+
     var loaded = { first_name: "", last_name: "" };
+    var username = "";
     var touched = {};
     var savingProfile = false;
     var savingPassword = false;
@@ -145,6 +418,27 @@
       }
     }
 
+    function formatDate(value, withTime) {
+      var d = new Date(value);
+      if (!value || isNaN(d.getTime())) return "";
+      var opts = { year: "numeric", month: "short", day: "numeric" };
+      if (withTime) { opts.hour = "numeric"; opts.minute = "2-digit"; }
+      return d.toLocaleString("en-PH", opts);
+    }
+
+    /* ---------- account summary ---------- */
+
+    function updateIdentity() {
+      var first = profileForm.elements.first_name.value.trim();
+      var last = profileForm.elements.last_name.value.trim();
+      var full = (first + " " + last).trim();
+      var initials = ((first[0] || "") + (last[0] || "")).toUpperCase() ||
+                     (username[0] || "A").toUpperCase();
+      accountAvatar.textContent = initials;
+      accountName.textContent = full || username || "Your account";
+      accountUser.textContent = username ? "@" + username : "";
+    }
+
     /* ---------- profile ---------- */
 
     function refreshProfile() {
@@ -152,18 +446,29 @@
         profileForm.elements.first_name.value.trim() !== loaded.first_name ||
         profileForm.elements.last_name.value.trim() !== loaded.last_name;
       profileBtn.disabled = savingProfile || !changed;
+      discardBtn.hidden = savingProfile || !changed;
       if (!savingProfile) {
-        profileHint.textContent = changed ? "Your changes are saved right away." : "Change your name to enable saving.";
+        profileHint.textContent = changed
+          ? "You have unsaved changes."
+          : "Change your name to enable saving.";
       }
+      updateIdentity();
     }
 
     profileForm.addEventListener("input", refreshProfile);
+
+    discardBtn.addEventListener("click", function () {
+      profileForm.elements.first_name.value = loaded.first_name;
+      profileForm.elements.last_name.value = loaded.last_name;
+      refreshProfile();
+    });
 
     profileForm.addEventListener("submit", async function (e) {
       e.preventDefault();
       Layout.clearNotices();
       savingProfile = true;
       profileBtn.disabled = true;
+      discardBtn.hidden = true;
       profileBtn.textContent = "Saving…";
       try {
         await Api.updateProfile({
@@ -181,7 +486,37 @@
       }
     });
 
+    // Warn before leaving the page with unsaved name changes
+    window.addEventListener("beforeunload", function (e) {
+      var dirty =
+        profileForm.elements.first_name.value.trim() !== loaded.first_name ||
+        profileForm.elements.last_name.value.trim() !== loaded.last_name;
+      if (dirty && !savingProfile) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
+
     /* ---------- password ---------- */
+
+    function strengthOf(pw) {
+      if (!pw) return { score: 0, label: "—", cls: "" };
+      var score = 0;
+      if (pw.length >= 8) score++;
+      if (pw.length >= 12) score++;
+      if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+      if (/\d/.test(pw)) score++;
+      if (/[^A-Za-z0-9]/.test(pw)) score++;
+      if (score <= 1) return { score: score, label: "Weak", cls: "" };
+      if (score === 2) return { score: score, label: "Fair", cls: "s-fair" };
+      if (score === 3) return { score: score, label: "Good", cls: "s-good" };
+      return { score: score, label: "Strong", cls: "s-strong" };
+    }
+
+    function setRule(name, ok) {
+      var li = rulesList.querySelector('[data-rule="' + name + '"]');
+      if (li) li.classList.toggle("ok", ok);
+    }
 
     function refreshPassword() {
       var current = passwordForm.elements.current_password;
@@ -191,20 +526,38 @@
       var currentOk = current.value !== "";
       var nextOk = next.value !== "";
       var confirmFilled = confirm.value !== "";
-      var matches = next.value === confirm.value;
+
+      var ruleLength = next.value.length >= 8;
+      var ruleCase = /[a-z]/.test(next.value) && /[A-Z]/.test(next.value);
+      var ruleNumber = /\d/.test(next.value);
+      var ruleMatch = nextOk && confirmFilled && next.value === confirm.value;
+      var ruleDiff = nextOk && next.value !== current.value;
+
+      setRule("length", ruleLength);
+      setRule("case", ruleCase);
+      setRule("number", ruleNumber);
+      setRule("match", ruleMatch);
+      setRule("diff", ruleDiff);
+
+      var s = strengthOf(next.value);
+      strengthFill.style.width = (next.value ? Math.max(s.score, 1) * 20 : 0) + "%";
+      strengthFill.className = "strength-fill " + s.cls;
+      strengthText.textContent = s.label;
 
       setInvalid(current.closest(".field"), !currentOk && !!touched.current_password, "This field is required.");
       setInvalid(next.closest(".field"), !nextOk && !!touched.new_password, "This field is required.");
 
       var confirmMessage = "";
       if (!confirmFilled) confirmMessage = "This field is required.";
-      else if (!matches) confirmMessage = "The new passwords do not match.";
+      else if (next.value !== confirm.value) confirmMessage = "The new passwords do not match.";
       setInvalid(confirm.closest(".field"), !!confirmMessage && !!touched.confirm_password, confirmMessage);
 
-      var allOk = currentOk && nextOk && confirmFilled && matches;
+      var allOk = currentOk && ruleLength && ruleCase && ruleNumber && ruleMatch && ruleDiff;
       passwordBtn.disabled = savingPassword || !allOk;
       if (!savingPassword) {
-        passwordHint.textContent = allOk ? "Your password changes right away." : "Fill in all password fields to enable saving.";
+        passwordHint.textContent = allOk
+          ? "Ready to update your password."
+          : "Complete all requirements above to enable saving.";
       }
     }
 
@@ -216,8 +569,37 @@
     passwordForm.addEventListener("input", markTouched);
     passwordForm.addEventListener("focusout", markTouched);
 
-    passwordForm.addEventListener("submit", async function (e) {
+    // Show / hide password
+    passwordForm.addEventListener("click", function (e) {
+      var toggle = e.target.closest(".pw-toggle");
+      if (!toggle) return;
+      var input = passwordForm.elements[toggle.dataset.toggle];
+      var show = input.type === "password";
+      input.type = show ? "text" : "password";
+      toggle.textContent = show ? "Hide" : "Show";
+      toggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    });
+
+    function closeModal() { confirmModal.hidden = true; }
+
+    // Submit opens the confirmation dialog first
+    passwordForm.addEventListener("submit", function (e) {
       e.preventDefault();
+      if (passwordBtn.disabled) return;
+      confirmModal.hidden = false;
+      confirmOk.focus();
+    });
+
+    confirmCancel.addEventListener("click", closeModal);
+    confirmModal.addEventListener("click", function (e) {
+      if (e.target === confirmModal) closeModal();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !confirmModal.hidden) closeModal();
+    });
+
+    confirmOk.addEventListener("click", async function () {
+      closeModal();
       Layout.clearNotices();
       savingPassword = true;
       passwordBtn.disabled = true;
@@ -230,6 +612,10 @@
         });
         passwordForm.reset();
         touched = {};
+        passwordForm.querySelectorAll(".pw-toggle").forEach(function (t) {
+          t.textContent = "Show";
+          t.setAttribute("aria-label", "Show password");
+        });
         Layout.notify("success", "Your password was changed.");
       } catch (err) {
         var list = err.errors && err.errors.length ? err.errors : [err.message];
@@ -243,16 +629,37 @@
     refreshProfile();
     refreshPassword();
 
+    /* ---------- load profile ---------- */
+
     Layout.ready.then(async function (ok) {
       if (!ok) return;
       try {
         var data = await Api.profile();
         var user = data.user;
-        document.getElementById("usernameInput").value = user.username;
+
+        username = user.username || "";
+        document.getElementById("usernameInput").value = username;
         profileForm.elements.first_name.value = user.first_name || "";
         profileForm.elements.last_name.value = user.last_name || "";
         loaded.first_name = (user.first_name || "").trim();
         loaded.last_name = (user.last_name || "").trim();
+
+        // Optional details: shown only if the backend sends them
+        if (user.is_superuser || user.is_staff) {
+          roleBadge.textContent = user.is_superuser ? "Administrator" : "Staff";
+          roleBadge.hidden = false;
+        }
+        var lastLogin = formatDate(user.last_login, true);
+        if (lastLogin) {
+          document.getElementById("lastLoginText").textContent = lastLogin;
+          document.getElementById("lastLoginWrap").hidden = false;
+        }
+        var joined = formatDate(user.date_joined, false);
+        if (joined) {
+          document.getElementById("memberSinceText").textContent = joined;
+          document.getElementById("memberSinceWrap").hidden = false;
+        }
+
         refreshProfile();
       } catch (err) {
         Layout.notify("error", err.message);

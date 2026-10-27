@@ -46,7 +46,7 @@
     </div>
     <div class="an-card an-tile">
       <div class="an-ring" id="ringLow" data-label="0%"></div>
-      <div><strong>Low stock</strong><small>10 units or fewer</small></div>
+      <div><strong>Low stock</strong><small>At or below reorder level</small></div>
     </div>
   </section>
 
@@ -262,7 +262,7 @@
 
       var c = d.counts;
       document.getElementById("alertCount").textContent = c.low + c.expired + c.expiring;
-      document.getElementById("lowText").textContent = c.low + " item" + plural(c.low) + " at 10 units or fewer";
+      document.getElementById("lowText").textContent = c.low + " item" + plural(c.low) + " at or below reorder level";
       document.getElementById("expiredText").textContent = c.expired + " item" + plural(c.expired) + " past expiry date";
       document.getElementById("expiringText").textContent = c.expiring + " within the next 30 days";
 

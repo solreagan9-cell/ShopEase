@@ -12,5 +12,8 @@ urlpatterns = [
     path("form-options/", api.form_options_view, name="api_form_options"),
     path("medicines/", api.medicines_view, name="api_medicines"),
     path("medicines/<int:pk>/", api.medicine_detail_view, name="api_medicine_detail"),
+    path("medicines/<int:pk>/restock/", api.medicine_restock_view, name="api_medicine_restock"),
+    path("medicines/<int:pk>/adjust/", api.medicine_adjust_view, name="api_medicine_adjust"),
+    path("movements/", api.movements_view, name="api_movements"),
     path("release/", api.release_view, name="api_release"),
 ]

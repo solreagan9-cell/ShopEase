@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock history · Saiver Pharmacy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/extra.css">
+  <style>
+    .num { text-align: right; }
+    .change-up { color: #15803d; font-weight: 700; }
+    .change-down { color: #c81e1e; font-weight: 700; }
+    .history-note { display: block; color: #66758d; font-size: 12.5px; }
+  </style>
+</head>
+<body data-page="stock-history" data-nav="history" data-title="Stock history"
+      data-parent-label="Medicine inventory" data-parent-href="medicines.html">
+
+<div id="page-source" hidden>
+
+  <section class="welcome-row">
+    <div>
+      <div class="eyebrow"><span class="eyebrow-line"></span> Inventory management</div>
+      <h1>Stock history</h1>
+      <p class="subtitle">Every restock, adjustment, and release, with who did it and when.</p>
+    </div>
+    <a class="button button-light" href="medicines.html">← Back to inventory</a>
+  </section>
+
+  <section class="panel inventory-page-panel">
+    <div class="inventory-toolbar">
+      <form method="get" action="stock-history.html" class="search-form">
+        <span class="search-symbol">⌕</span>
+        <input type="search" name="q" id="searchInput" placeholder="Search medicine, batch, reason, note…" aria-label="Search stock history">
+        <input type="hidden" name="kind" id="kindInput" disabled>
+        <button class="button button-dark" type="submit">Search</button>
+        <a class="clear-link" id="clearLink" href="stock-history.html" hidden>Clear</a>
+      </form>
+      <div class="filter-chips" id="chips"></div>
+    </div>
+
+    <div id="listBox">
+      <p class="release-empty">Loading…</p>
+    </div>
+  </section>
+
+</div>
+
+<script src="js/logo-data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/layout.js"></script>
+<script>
+  (function () {
+    var params = new URLSearchParams(location.search);
+    var query = (params.get("q") || "").trim();
+    var kind = (params.get("kind") || "").trim();
+    var page = params.get("page") || "1";
+
+    function link(extra) {
+      var p = {};
+      if (query) p.q = query;
+      if (kind) p.kind = kind;
+      Object.keys(extra || {}).forEach(function (k) {
+        if (extra[k] === null) { delete p[k]; } else { p[k] = extra[k]; }
+      });
+      var s = new URLSearchParams(p).toString();
+      return "stock-history.html" + (s ? "?" + s : "");
+    }
+
+    function renderToolbar() {
+      document.getElementById("searchInput").value = query;
+      var kindInput = document.getElementById("kindInput");
+      if (kind) { kindInput.value = kind; kindInput.disabled = false; }
+      document.getElementById("clearLink").hidden = !(query || kind);
+
+      var chips = [
+        { key: "", label: "All activity" },
+        { key: "restock", label: "Restock" },
+        { key: "adjustment", label: "Adjustments" },
+        { key: "release", label: "Releases" },
+        { key: "initial", label: "Initial stock" }
+      ];
+      document.getElementById("chips").innerHTML = chips.map(function (c) {
+        var href = link({ kind: c.key || null, page: null });
+        return '<a class="filter-chip' + (kind === c.key ? " selected" : "") +
+          '" href="' + esc(href) + '">' + c.label + "</a>";
+      }).join("");
+    }
+
+    function kindPill(m) {
+      var cls = "pill";
+      if (m.kind === "restock") cls += " pill-good";
+      if (m.kind === "adjustment") cls += " pill-warning";
+      return '<span class="' + cls + '">' + esc(m.kind_label) + "</span>";
+    }
+
+    function changeCell(n) {
+      if (n > 0) return '<span class="change-up">+' + n + "</span>";
+      if (n < 0) return '<span class="change-down">−' + Math.abs(n) + "</span>";
+      return "0";
+    }
+
+    function row(m) {
+      var detail = [m.reason, m.supplier ? "Supplier: " + m.supplier : ""].filter(Boolean).join(" · ");
+      return "<tr>" +
+        '<td class="muted-cell">' + esc(fmtDateTime(m.created_at)) + "</td>" +
+        "<td><strong>" + esc(m.medicine) + '</strong><small class="history-note">' + esc(m.batch_number) + "</small></td>" +
+        "<td>" + kindPill(m) + "</td>" +
+        '<td class="num">' + changeCell(m.quantity_change) + "</td>" +
+        '<td class="num">' + esc(m.quantity_after) + "</td>" +
+        "<td>" + esc(detail || "—") +
+          (m.note ? '<small class="history-note">' + esc(m.note) + "</small>" : "") + "</td>" +
+        '<td class="muted-cell">' + esc(m.by || "—") + "</td></tr>";
+    }
+
+    function render(data) {
+      var box = document.getElementById("listBox");
+
+      if (!data.results.length) {
+        box.innerHTML =
+          '<div class="empty-state"><div class="empty-icon">▤</div><h3>No stock activity yet</h3>' +
+          "<p>Restocks, adjustments, and releases will appear here.</p>" +
+          '<a class="button button-primary" href="medicines.html">Go to inventory</a></div>';
+        return;
+      }
+
+      var prev = data.has_previous
+        ? '<a href="' + esc(link({ page: data.page - 1 })) + '">← Previous</a>' : "";
+      var next = data.has_next
+        ? '<a href="' + esc(link({ page: data.page + 1 })) + '">Next →</a>' : "";
+
+      box.innerHTML =
+        '<div class="table-wrap"><table><thead><tr>' +
+        "<th>Date</th><th>Medicine</th><th>Type</th>" +
+        '<th class="num">Change</th><th class="num">Stock after</th><th>Details</th><th>By</th>' +
+        "</tr></thead><tbody>" + data.results.map(row).join("") + "</tbody></table></div>" +
+        '<div class="table-footer"><span>Showing ' + data.start_index + "–" + data.end_index +
+        " of " + data.count + " entries</span>" +
+        '<div class="pagination">' + prev + "<span>Page " + data.page + " of " + data.num_pages +
+        "</span>" + next + "</div></div>";
+    }
+
+    Layout.ready.then(async function (ok) {
+      if (!ok) return;
+      renderToolbar();
+      try {
+        render(await Api.movements({ q: query, kind: kind, page: page }));
+      } catch (err) {
+        document.getElementById("listBox").innerHTML = "";
+        Layout.notify("error", err.message);
+      }
+    });
+  })();
+</script>
+</body>
+</html>
