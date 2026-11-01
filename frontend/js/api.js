@@ -1,7 +1,7 @@
 /* Shared API client + small helpers used by every page.
    If your Django server runs somewhere else, change API_BASE. */
-var API_BASE = "http://127.0.0.1:8000/api/v1";
-
+/*var API_BASE = "http://127.0.0.1:8000/api/v1";*/
+const API_BASE = "https://shopease-pb01.onrender.com/api/v1";
 /* ---------- helpers ---------- */
 
 function esc(value) {

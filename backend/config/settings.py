@@ -131,9 +131,12 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "pharmacy:dashboard"
 LOGOUT_REDIRECT_URL = "login"
-
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+CSRF_TRUSTED_ORIGINS = [
+    "https://shopease-pb01.onrender.com",
+    "https://YOUR-STATIC-SITE.onrender.com",
+]
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
