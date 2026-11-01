@@ -21,7 +21,7 @@ from django.urls import path, include
 from django.views.generic import RedirectView
 
 urlpatterns = [
-    path("", RedirectView.as_view(url="https://YOUR-STATIC-SITE.onrender.com/", permanent=False)),
+    path("", RedirectView.as_view(url="https://shopease-abc1.onrender.com/", permanent=False)),
     path("admin/", admin.site.urls),
 
     path("login/", auth_views.LoginView.as_view(
