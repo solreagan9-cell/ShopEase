@@ -54,10 +54,10 @@ MIDDLEWARE = [
 CSRF_TRUSTED_ORIGINS = [
     "https://shopease-1-wtdp.onrender.com"
 ]
-FRONTEND_ORIGINS = [
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-]
+#FRONTEND_ORIGINS = [
+  #  "http://127.0.0.1:5500",
+   # "http://localhost:5500",
+#]
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
