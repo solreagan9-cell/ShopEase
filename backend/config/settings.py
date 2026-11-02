@@ -13,11 +13,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config("SECRET_KEY", default="dev-only-insecure-key-change-me")
 DEBUG = config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = config(
-    "ALLOWED_HOSTS",
-    default="shopease-pb01.onrender.com,localhost,127.0.0.1",
-    cast=Csv(),
-)
+ALLOWED_HOSTS = [
+    "shopease-pb01.onrender.com",
+    ".onrender.com",
+    "localhost",
+    "127.0.0.1",
+]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://shopease-pb01.onrender.com",
